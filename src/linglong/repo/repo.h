@@ -7,8 +7,9 @@
 #ifndef LINGLONG_SRC_MODULE_REPO_REPO_H_
 #define LINGLONG_SRC_MODULE_REPO_REPO_H_
 
-#include "linglong/package/package.h"
-#include "linglong/repo/config/ConfigV1.hpp"
+#include "linglong/api/types/v1/RepoConfig.hpp"
+#include "linglong/package/fuzz_reference.h"
+#include "linglong/package/reference.h"
 #include "linglong/utils/error/error.h"
 
 #include <QString>
@@ -17,7 +18,6 @@ namespace linglong {
 
 namespace package {
 class Bundle;
-class Ref;
 } // namespace package
 
 namespace repo {
@@ -32,46 +32,46 @@ public:
     Repo &operator=(Repo &&) = delete;
     virtual ~Repo() = default;
 
-    virtual linglong::utils::error::Result<QList<package::Ref>> listLocalRefs() = 0;
+    virtual utils::error::Result<QList<package::Reference>> listLocalRefs() = 0;
 
-    virtual linglong::utils::error::Result<void> importDirectory(const package::Ref &ref,
-                                                                 const QString &path) = 0;
+    virtual utils::error::Result<void> importDirectory(const package::Reference &ref,
+                                                       const QString &path) = 0;
 
-    virtual linglong::utils::error::Result<void> push(const package::Ref &ref) = 0;
+    virtual utils::error::Result<void> push(const package::Reference &reference) = 0;
 
-    virtual linglong::utils::error::Result<void> pull(package::Ref &ref, bool force) = 0;
-    virtual linglong::utils::error::Result<void> pullAll(const package::Ref &ref, bool force) = 0;
-    virtual linglong::utils::error::Result<void> checkout(const package::Ref &ref,
-                                                          const QString &subPath,
-                                                          const QString &target) = 0;
+    virtual utils::error::Result<void> pull(package::Reference &ref, bool force) = 0;
+    virtual utils::error::Result<void> pullAll(const package::Reference &ref, bool force) = 0;
+    virtual utils::error::Result<void> checkout(const package::Reference &ref,
+                                                const QString &subPath,
+                                                const QString &target) = 0;
 
-    virtual linglong::utils::error::Result<void> checkoutAll(const package::Ref &ref,
-                                                             const QString &subPath,
-                                                             const QString &target) = 0;
+    virtual utils::error::Result<void> checkoutAll(const package::Reference &ref,
+                                                   const QString &subPath,
+                                                   const QString &target) = 0;
 
-    virtual QString rootOfLayer(const package::Ref &ref) = 0;
+    virtual QString rootOfLayer(const package::Reference &ref) = 0;
 
-    virtual linglong::utils::error::Result<QString> remoteShowUrl(const QString &repoName) = 0;
+    virtual utils::error::Result<QString> remoteShowUrl(const QString &repoName) = 0;
 
-    virtual linglong::utils::error::Result<package::Ref>
-    localLatestRef(const package::Ref &ref) = 0;
+    virtual utils::error::Result<package::Reference>
+    localLatestRef(const package::FuzzReference &ref) = 0;
 
-    virtual linglong::utils::error::Result<package::Ref>
-    remoteLatestRef(const package::Ref &ref) = 0;
+    virtual utils::error::Result<package::Reference>
+    remoteLatestRef(const package::FuzzReference &fuzzRef) = 0;
 
-    virtual utils::error::Result<package::Ref> latestOfRef(const QString &appId,
-                                                           const QString &appVersion) = 0;
+    virtual utils::error::Result<package::Reference> latestOfRef(const QString &appId,
+                                                                 const QString &appVersion) = 0;
 
-    virtual linglong::utils::error::Result<void> getRemoteRepoList(QVector<QString> &vec) = 0;
-    virtual linglong::utils::error::Result<void> repoPullbyCmd(const QString &destPath,
-                                                               const QString &remoteName,
-                                                               const QString &ref) = 0;
-    virtual linglong::utils::error::Result<void> repoDeleteDatabyRef(const QString &repoPath,
-                                                                     const QString &ref) = 0;
+    virtual utils::error::Result<void> getRemoteRepoList(QVector<QString> &vec) = 0;
+    virtual utils::error::Result<void> repoPullbyCmd(const QString &destPath,
+                                                     const QString &remoteName,
+                                                     const QString &ref) = 0;
+    virtual utils::error::Result<void> repoDeleteDatabyRef(const QString &repoPath,
+                                                           const QString &ref) = 0;
 
-    virtual config::ConfigV1 getConfig() const noexcept = 0;
-    virtual linglong::utils::error::Result<void>
-    setConfig(const config::ConfigV1 &cfg) noexcept = 0;
+    virtual api::types::v1::RepoConfig getConfig() const noexcept = 0;
+    virtual utils::error::Result<void>
+    setConfig(const api::types::v1::RepoConfig &cfg) noexcept = 0;
 };
 
 } // namespace repo

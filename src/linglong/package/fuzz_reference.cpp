@@ -74,7 +74,7 @@ FuzzReference::FuzzReference(const std::optional<QString> &channel,
     , version(version)
     , arch(architecture)
 {
-    if (channel.has_value() && channel->isEmpty()) {
+    if (channel && channel->isEmpty()) {
         throw std::runtime_error("empty channel");
     }
 
@@ -88,8 +88,8 @@ QString FuzzReference::toString() const noexcept
     return QString("%1:%2/%3/%4")
       .arg(this->channel.value_or("unknown"),
            this->id,
-           this->version.has_value() ? this->version->toString() : "unknown",
-           this->arch.has_value() ? this->arch->toString() : "unknown");
+           this->version ? this->version->toString() : "unknown",
+           this->arch ? this->arch->toString() : "unknown");
 }
 
 } // namespace linglong::package

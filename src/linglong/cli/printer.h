@@ -7,10 +7,11 @@
 #ifndef LINGLONG_SRC_CLI_PRINTER_H_
 #define LINGLONG_SRC_CLI_PRINTER_H_
 
-#include "linglong/dbus_ipc/reply.h"
-#include "linglong/package/package.h"
-#include "linglong/package/info.h"
-#include "linglong/runtime/container.h"
+#include "linglong/api/types/v1/CliContainer.hpp"
+#include "linglong/api/types/v1/CommonResult.hpp"
+#include "linglong/api/types/v1/LayerInfo.hpp"
+#include "linglong/api/types/v1/PackageInfo.hpp"
+#include "linglong/api/types/v1/PackageManager1GetRepoInfoResultRepoInfo.hpp"
 #include "linglong/utils/error/error.h"
 
 #include <QJsonObject>
@@ -30,12 +31,14 @@ public:
     Printer &operator=(const Printer &) = delete;
     Printer &operator=(Printer &&) = delete;
     virtual ~Printer() = default;
+
     virtual void printErr(const utils::error::Error &);
-    virtual void printAppMetaInfos(const QList<QSharedPointer<linglong::package::AppMetaInfo>> &);
-    virtual void printContainers(const QList<QSharedPointer<Container>> &);
-    virtual void printReply(const linglong::service::Reply &);
-    virtual void printQueryReply(const linglong::service::QueryReply &);
-    virtual void printLayerInfo(const QSharedPointer<linglong::package::Info> &);
+
+    virtual void printPackageInfos(const std::vector<api::types::v1::PackageInfo> &);
+    virtual void printContainers(const std::vector<api::types::v1::CliContainer> &);
+    virtual void printCommonResult(const api::types::v1::CommonResult &);
+    virtual void printRepoInfos(const api::types::v1::PackageManager1GetRepoInfoResultRepoInfo &);
+    virtual void printLayerInfo(const api::types::v1::LayerInfo &);
 
     virtual void printMessage(const QString &, const int num = -1);
     virtual void printReplacedText(const QString &, const int num = -1);

@@ -8,10 +8,6 @@
 #define LINGLONG_SRC_PACKAGE_MANAGER_PACKAGE_MANAGER_H_
 
 #include "linglong/api/dbus/v1/package_manager_helper.h"
-#include "linglong/dbus_ipc/package_manager_param.h"
-#include "linglong/dbus_ipc/param_option.h"
-#include "linglong/dbus_ipc/reply.h"
-#include "linglong/package/package.h"
 #include "linglong/repo/repo.h"
 #include "linglong/repo/repo_client.h"
 
@@ -22,7 +18,6 @@
 #include <QObject>
 #include <QScopedPointer>
 #include <QThreadPool>
-#include <QtConcurrent/QtConcurrent>
 
 namespace linglong::service {
 /**
@@ -46,105 +41,24 @@ public:
     PackageManager(PackageManager &&) = delete;
     auto operator=(const PackageManager &) -> PackageManager & = delete;
     auto operator=(PackageManager &&) -> PackageManager & = delete;
+    virtual auto InstallSync(const QVariantMap &parameters) -> QVariantMap;
+
 public Q_SLOTS:
+    auto getRepoInfo() -> QVariantMap;
 
-    /**
-     * @brief 查询仓库信息
-     *
-     * @return Reply dbus方法调用应答 \n
-     *          code:状态码 \n
-     *          message:仓库名
-     *          result:仓库url
-     */
-    auto getRepoInfo() -> QueryReply;
+    virtual auto ModifyRepo(const QVariantMap &parameters) -> QVariantMap;
 
-    /**
-     * @brief 修改仓库url
-     *
-     * @param name 仓库name
-     * @param url 仓库url地址
-     *
-     * @return Reply dbus方法调用应答 \n
-     *          code:状态码 \n
-     *          message:信息
-     */
-    virtual auto ModifyRepo(const QString &name, const QString &url) -> Reply;
+    virtual auto Install(const QVariantMap &parameters) -> QVariantMap;
 
-    /**
-     * @brief 查询软件包下载安装状态
-     *
-     * @param paramOption 查询参数
-     * @param type 查询类型 0:查询应用安装进度 1:查询应用更新进度
-     *
-     * @return Reply dbus方法调用应答 \n
-     *          code:状态码 \n
-     *          message:信息
-     */
-    auto GetDownloadStatus(const ParamOption &paramOption, int type) -> Reply;
+    virtual auto InstallLayer(const QVariantMap &parameters) -> QVariantMap;
 
-    /**
-     * @brief 安装软件包
-     *
-     * @param installParamOption 安装参数
-     *
-     * @return Reply dbus方法调用应答 \n
-     *          code:状态码 \n
-     *          message:信息
-     */
-    virtual auto Install(const InstallParamOption &installParamOption) -> Reply;
-    virtual auto InstallSync(const InstallParamOption &installParamOption) -> Reply;
+    virtual auto InstallLayerFD(const QDBusUnixFileDescriptor &fileDescriptor) -> QVariantMap;
 
-    /**
-     * @brief 安装layer文件
-     *
-     * @param installParamOption 安装参数
-     *
-     * @return Reply dbus方法调用应答 \n
-     *          code:状态码 \n
-     *          message:信息
-     */
-    virtual auto InstallLayer(const InstallParamOption &installParamOption) -> Reply;
+    virtual auto Uninstall(const QVariantMap &parameters) -> QVariantMap;
 
-    /**
-     * @brief 安装layer文件
-     *
-     * @param fileDescriptor layer文件描述符
-     *
-     * @return Reply dbus方法调用应答 \n
-     *          code:状态码 \n
-     *          message:信息
-     */
-    virtual auto InstallLayerFD(const QDBusUnixFileDescriptor &fileDescriptor) -> Reply;
+    virtual auto Update(const QVariantMap &parameters) -> QVariantMap;
 
-    /**
-     * @brief 卸载软件包
-     *
-     * @param paramOption 卸载参数
-     *
-     * @return Reply 同Install
-     */
-    virtual auto Uninstall(const UninstallParamOption &paramOption) -> Reply;
-
-    /**
-     * @brief 更新软件包
-     *
-     * @param paramOption 更新包参数
-     *
-     * @return Reply 同Install
-     */
-    auto Update(const ParamOption &paramOption) -> Reply;
-
-    /**
-     * @brief 查询软件包信息
-     *
-     * @param paramOption 查询命令参数
-     *
-     * @return QueryReply dbus方法调用应答 \n
-     *         code 状态码 \n
-     *         message 状态信息 \n
-     *         result 查询结果
-     */
-    virtual auto Query(const QueryParamOption &paramOption) -> QueryReply;
+    virtual auto Query(const QVariantMap &parameters) -> QVariantMap;
 
 public:
     // FIXME: ??? why this public?

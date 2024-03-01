@@ -107,13 +107,6 @@ private:
     QString endpoint;
 };
 
-QSERIALIZER_DECLARE(OciDistributionClientManifestItemPlatform);
-QSERIALIZER_DECLARE(OciDistributionClientManifestListItem);
-QSERIALIZER_DECLARE(OciDistributionClientManifestList);
-QSERIALIZER_DECLARE(OciDistributionClientManifestFsLayer);
-QSERIALIZER_DECLARE(OciDistributionClientManifestLayer);
-QSERIALIZER_DECLARE(OciDistributionClientManifest);
-
 } // namespace linglong::oci
 
 #endif // LINGLONG_SRC_MODULE_UTIL_OCI_DISTRIBUTION_CLIENT_H_

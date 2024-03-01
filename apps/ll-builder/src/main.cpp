@@ -10,10 +10,10 @@
 #include "linglong/cli/printer.h"
 #include "linglong/package/architecture.h"
 #include "linglong/service/app_manager.h"
-#include "linglong/util/qserializer/yaml.h"
 #include "linglong/util/xdg.h"
 #include "linglong/utils/error/error.h"
 #include "linglong/utils/global/initialize.h"
+#include "linglong/utils/serialize/yaml.h"
 #include "spdlog/logger.h"
 #include "spdlog/sinks/stdout_color_sinks.h"
 #include "spdlog/sinks/systemd_sink.h"
@@ -62,6 +62,7 @@ int main(int argc, char **argv)
     if (!crun.has_value()) {
         std::rethrow_exception(crun.error());
     }
+
     linglong::builder::BuilderConfig::instance()->setProjectRoot(QDir::currentPath());
 
     QCommandLineParser parser;
@@ -89,19 +90,16 @@ int main(int argc, char **argv)
     api.setNewServerForAllOperations(
       linglong::builder::BuilderConfig::instance()->remoteRepoEndpoint);
 
-    auto config = linglong::repo::config::ConfigV1{
-        linglong::builder::BuilderConfig::instance()->remoteRepoName.toStdString(),
-        { { linglong::builder::BuilderConfig::instance()->remoteRepoName.toStdString(),
-            linglong::builder::BuilderConfig::instance()->remoteRepoEndpoint.toStdString() } },
-        1
-    };
+    QFile builderConfigFile = ;
+    auto builderConfig =
+      linglong::utils::serialize::LoadYAML<linglong::api::types::v1::BuilderConfig>();
 
     linglong::repo::OSTreeRepo ostree(linglong::builder::BuilderConfig::instance()->repoPath(),
                                       config,
                                       api);
     linglong::cli::Printer printer;
-    linglong::service::AppManager appManager(ostree, *crun->get());
-    linglong::builder::LinglongBuilder builder(ostree, printer, *crun->get(), appManager);
+    linglong::service::AppManager appManager(ostree, **crun);
+    linglong::builder::LinglongBuilder builder(ostree, **crun, appManager);
 
     QMap<QString, std::function<int(QCommandLineParser & parser)>> subcommandMap = {
         { "convert",

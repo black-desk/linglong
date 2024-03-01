@@ -8,7 +8,6 @@
 #define LINGLONG_SRC_SYSTEM_HELPER_PRIVILEGE_PRIVILEGE_INSTALL_PORTAL_H_
 
 #include "linglong/util/error.h"
-#include "linglong/util/qserializer/deprecated.h"
 
 #include <QString>
 #include <QVariantMap>

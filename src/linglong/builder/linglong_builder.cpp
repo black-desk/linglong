@@ -8,15 +8,11 @@
 
 #include "builder_config.h"
 #include "depend_fetcher.h"
-#include "linglong/package/bundle.h"
-#include "linglong/package/info.h"
 #include "linglong/package/layer_packager.h"
 #include "linglong/repo/ostree_repo.h"
 #include "linglong/runtime/container.h"
 #include "linglong/util/error.h"
 #include "linglong/util/file.h"
-#include "linglong/util/qserializer/json.h"
-#include "linglong/util/qserializer/yaml.h"
 #include "linglong/util/runner.h"
 #include "linglong/util/uuid.h"
 #include "linglong/utils/command/env.h"
@@ -29,11 +25,11 @@
 #include "ocppi/runtime/config/ConfigLoader.hpp"
 #include "ocppi/runtime/config/types/Hook.hpp"
 #include "ocppi/runtime/config/types/Hooks.hpp"
+#include "ocppi/runtime/config/types/IdMapping.hpp"
 #include "project.h"
 #include "source_fetcher.h"
 
 #include <linux/prctl.h>
-#include <ocppi/runtime/config/types/IdMapping.hpp>
 #include <sys/prctl.h>
 #include <yaml-cpp/yaml.h>
 
@@ -53,12 +49,10 @@
 
 namespace linglong::builder {
 
-QSERIALIZER_IMPL(message)
-
-LinglongBuilder::LinglongBuilder(repo::OSTreeRepo &ostree,
-                                 cli::Printer &p,
-                                 ocppi::cli::CLI &cli,
-                                 service::AppManager &appManager)
+Builder::Builder(repo::OSTreeRepo &ostree,
+                 cli::Printer &p,
+                 ocppi::cli::CLI &cli,
+                 service::AppManager &appManager)
     : repo(ostree)
     , printer(p)
     , ociCLI(cli)
@@ -66,8 +60,8 @@ LinglongBuilder::LinglongBuilder(repo::OSTreeRepo &ostree,
 {
 }
 
-linglong::utils::error::Result<void> LinglongBuilder::buildStageCommitBuildOutput(
-  Project *project, const QString &upperdir, const QString &workdir)
+utils::error::Result<void> Builder::buildStageCommitBuildOutput(
+  const api::types::v1::BuilderProject &project, const QString &upperdir, const QString &workdir)
 {
     LINGLONG_TRACE("commit build output");
 
@@ -760,8 +754,8 @@ LinglongBuilder::buildStageEnvrionment(ocppi::runtime::config::types::Config &r,
     }
     // 一些默认的环境变量
     r.process->env->push_back("PREFIX=" + project.config().targetInstallPath("").toStdString());
-    r.process->env->push_back(
-      "PATH=/runtime/bin:/usr/local/bin:/usr/bin:/bin:/usr/local/games:/usr/games:/sbin:/usr/sbin");
+    r.process->env->push_back("PATH=/runtime/bin:/usr/local/bin:/usr/bin:/bin:/usr/local/games:/"
+                              "usr/games:/sbin:/usr/sbin");
 
     if (project.config().targetArch() == "x86_64") {
         r.process->env->push_back("PKG_CONFIG_PATH=/runtime/lib/x86_64-linux-gnu/pkgconfig");
@@ -884,7 +878,7 @@ linglong::utils::error::Result<QSharedPointer<Project>> LinglongBuilder::buildSt
         return LINGLONG_ERR("unknown package kind");
     }
 
-    project->generateBuildScript();
+    this->generateBuildScript();
     project->configFilePath = projectConfigPath;
 
     linglong::builder::BuilderConfig::instance()->setProjectName(project->package->id);

@@ -8,7 +8,6 @@
 
 #include "linglong/package/info.h"
 #include "linglong/package/layer_file.h"
-#include "linglong/util/qserializer/json.h"
 #include "linglong/utils/command/env.h"
 #include "linglong/utils/error/error.h"
 

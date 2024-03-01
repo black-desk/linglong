@@ -9,7 +9,6 @@
 #include "linglong/dbus_ipc/package_manager_param.h"
 #include "linglong/package/ref.h"
 #include "linglong/util/file.h"
-#include "linglong/util/qserializer/yaml.h"
 
 #include <QDBusError>
 #include <QDir>
@@ -18,9 +17,6 @@
 namespace linglong {
 namespace system {
 namespace helper {
-
-QSERIALIZER_IMPL(FilePortalRule);
-QSERIALIZER_IMPL(PortalRule);
 
 const char *PrivilegePortalRule = R"MLS00(
 whiteList:

@@ -6,8 +6,10 @@
 
 #include "ostree_repo.h"
 
-#include "linglong/package/info.h"
-#include "linglong/package/ref.h"
+#include "linglong/api/types/helper.h"
+#include "linglong/api/types/v1/Generators.hpp"
+#include "linglong/package/fuzz_reference.h"
+#include "linglong/package/reference.h"
 #include "linglong/repo/config.h"
 #include "linglong/repo/repo.h"
 #include "linglong/util/error.h"
@@ -21,7 +23,6 @@
 #include <gio/gio.h>
 #include <glib.h>
 #include <ostree-repo.h>
-#include <qdir.h>
 
 #include <QDir>
 #include <QProcess>
@@ -30,24 +31,13 @@
 #include <cstddef>
 #include <utility>
 
+#include <fcntl.h>
+
 namespace linglong {
 namespace repo {
 
-namespace {
-const int MAX_ERRINFO_BUFSIZE = 512;
-}
-
-QSERIALIZER_IMPL(RevPair);
-QSERIALIZER_IMPL(UploadResponseData);
-
-QSERIALIZER_IMPL(UploadTaskRequest);
-QSERIALIZER_IMPL(UploadRequest);
-QSERIALIZER_IMPL(UploadTaskResponse);
-
-typedef QMap<QString, OstreeRepoObject> RepoObjectMap;
-
 OSTreeRepo::OSTreeRepo(const QString &localRepoPath,
-                       const config::ConfigV1 &cfg,
+                       const api::types::v1::RepoConfig &cfg,
                        api::client::ClientApi &client)
     : cfg(cfg)
     , repoRootPath(QDir(localRepoPath).absolutePath())
@@ -65,7 +55,7 @@ OSTreeRepo::OSTreeRepo(const QString &localRepoPath,
     // Repo into read-only Repo and modifiable Repo, and void using modifiable Repo in
     // ll-service.
     auto ret = initCreateRepoIfNotExists();
-    if (ret.has_value()) {
+    if (ret) {
         return;
     }
 
@@ -76,20 +66,22 @@ OSTreeRepo::OSTreeRepo(const QString &localRepoPath,
 
     g_autoptr(GFile) repoPath = g_file_new_for_path(ostreePath.toLocal8Bit());
     g_autoptr(OstreeRepo) repo = ostree_repo_new(repoPath);
-    if (!ostree_repo_open(repo, nullptr, &gErr)) {
+    ostree_repo_open(repo, nullptr, &gErr);
+    if (gErr != nullptr) {
         qCritical().noquote() << "open repo" << ostreePath << "failed"
                               << QString::fromStdString(std::string(gErr->message));
     }
+
     Q_ASSERT(repo);
     repoPtr.reset(g_steal_pointer(&repo));
 }
 
-config::ConfigV1 OSTreeRepo::getConfig() const noexcept
+api::types::v1::RepoConfig OSTreeRepo::getConfig() const noexcept
 {
     return cfg;
 }
 
-linglong::utils::error::Result<void> OSTreeRepo::setConfig(const config::ConfigV1 &cfg) noexcept
+utils::error::Result<void> OSTreeRepo::setConfig(const api::types::v1::RepoConfig &cfg) noexcept
 {
     LINGLONG_TRACE("set config");
 
@@ -124,7 +116,8 @@ linglong::utils::error::Result<void> OSTreeRepo::setConfig(const config::ConfigV
       cfg.repos.at(cfg.defaultRepo).c_str());
 
     g_autoptr(GError) gErr = nullptr;
-    if (!ostree_repo_write_config(this->repoPtr.get(), cfgGKeyFile, &gErr)) {
+    ostree_repo_write_config(this->repoPtr.get(), cfgGKeyFile, &gErr);
+    if (gErr != nullptr) {
         return LINGLONG_ERR("ostree_repo_write_config", gErr);
     }
 
@@ -139,8 +132,7 @@ linglong::utils::error::Result<void> OSTreeRepo::setConfig(const config::ConfigV
     return LINGLONG_OK;
 }
 
-linglong::utils::error::Result<void> OSTreeRepo::importDirectory(const package::Ref &ref,
-                                                                 const QString &path)
+utils::error::Result<void> OSTreeRepo::importDirectory(const package::Reference &ref, const QString &path)
 {
     LINGLONG_TRACE("import directory");
 
@@ -152,8 +144,8 @@ linglong::utils::error::Result<void> OSTreeRepo::importDirectory(const package::
     return LINGLONG_OK;
 }
 
-linglong::utils::error::Result<void> OSTreeRepo::importRef(const package::Ref &oldRef,
-                                                           const package::Ref &newRef)
+utils::error::Result<void> OSTreeRepo::importRef(const package::Ref &oldRef,
+                                                 const package::Ref &newRef)
 {
     LINGLONG_TRACE("import ref");
 
@@ -165,16 +157,18 @@ linglong::utils::error::Result<void> OSTreeRepo::importRef(const package::Ref &o
     return LINGLONG_OK;
 }
 
-linglong::utils::error::Result<void> OSTreeRepo::commit(Tree treeType,
-                                                        const package::Ref &ref,
-                                                        const QString &path,
-                                                        const package::Ref &oldRef)
+utils::error::Result<void> OSTreeRepo::commit(Tree treeType,
+                                              const package::Ref &ref,
+                                              const QString &path,
+                                              const package::Ref &oldRef)
 {
     LINGLONG_TRACE("commit");
 
     g_autoptr(GError) gErr = nullptr;
-    if (!ostree_repo_prepare_transaction(repoPtr.get(), NULL, NULL, &gErr))
+    ostree_repo_prepare_transaction(repoPtr.get(), NULL, NULL, &gErr);
+    if (gErr != nullptr) {
         return LINGLONG_ERR("ostree_repo_prepare_transaction", gErr);
+    }
 
     g_autoptr(OstreeMutableTree) mtree = ostree_mutable_tree_new();
 
@@ -190,54 +184,58 @@ linglong::utils::error::Result<void> OSTreeRepo::commit(Tree treeType,
         gfile = g_file_new_for_path(path.toStdString().c_str());
         break;
     case REF:
-        if (!ostree_repo_read_commit(repoPtr.get(),
-                                     oldRef.toOSTreeRefLocalString().toStdString().c_str(),
-                                     &gfile,
-                                     NULL,
-                                     nullptr,
-                                     &gErr))
+        ostree_repo_read_commit(repoPtr.get(),
+                                oldRef.toOSTreeRefLocalString().toStdString().c_str(),
+                                &gfile,
+                                NULL,
+                                nullptr,
+                                &gErr);
+        if (gErr != nullptr) {
             return LINGLONG_ERR("ostree_repo_read_commit", gErr);
+        }
         break;
     case TAR:
         qWarning() << "not impelement now.";
         break;
     }
-    if (!ostree_repo_write_directory_to_mtree(repoPtr.get(),
-                                              gfile,
-                                              mtree,
-                                              modifier,
-                                              nullptr,
-                                              &gErr))
+    ostree_repo_write_directory_to_mtree(repoPtr.get(), gfile, mtree, modifier, nullptr, &gErr);
+    if (gErr == nullptr) {
         return LINGLONG_ERR("ostree_repo_write_directory_to_mtree", gErr);
+    }
 
     g_autoptr(OstreeRepoFile) repo_file = nullptr;
-    if (!ostree_repo_write_mtree(repoPtr.get(), mtree, (GFile **)&repo_file, nullptr, &gErr))
+    ostree_repo_write_mtree(repoPtr.get(), mtree, (GFile **)&repo_file, nullptr, &gErr);
+    if (gErr != nullptr) {
         return LINGLONG_ERR("ostree_repo_write_mtree", gErr);
+    }
 
     g_autofree char *out_commit = nullptr;
-    if (!ostree_repo_write_commit(repoPtr.get(),
-                                  nullptr,
-                                  nullptr,
-                                  nullptr,
-                                  nullptr,
-                                  repo_file,
-                                  &out_commit,
-                                  NULL,
-                                  &gErr)) {
+    ostree_repo_write_commit(repoPtr.get(),
+                             nullptr,
+                             nullptr,
+                             nullptr,
+                             nullptr,
+                             repo_file,
+                             &out_commit,
+                             NULL,
+                             &gErr);
+    if (gErr != nullptr) {
         return LINGLONG_ERR("ostree_repo_write_commit", gErr);
     }
+
     ostree_repo_transaction_set_ref(repoPtr.get(),
                                     NULL,
                                     ref.toOSTreeRefLocalString().toStdString().c_str(),
                                     out_commit);
+
     ostree_repo_commit_transaction(repoPtr.get(), NULL, NULL, &gErr);
-    if (gErr) {
+    if (gErr != nullptr) {
         return LINGLONG_ERR("ostree_repo_commit_transaction", gErr);
     }
     return LINGLONG_OK;
 }
 
-linglong::utils::error::Result<void> OSTreeRepo::push(const package::Ref &ref)
+utils::error::Result<void> OSTreeRepo::push(const package::Reference &ref)
 {
     LINGLONG_TRACE("push");
 
@@ -246,13 +244,6 @@ linglong::utils::error::Result<void> OSTreeRepo::push(const package::Ref &ref)
         return LINGLONG_ERR(ret);
     }
 
-    remoteToken = *ret;
-    QSharedPointer<UploadRequest> uploadReq(new UploadRequest);
-
-    uploadReq->repoName = remoteRepoName;
-    uploadReq->ref = ref.toOSTreeRefLocalString();
-
-    // FIXME: no need,use /v1/meta/:id
     auto repoInfo = getRepoInfo(remoteRepoName);
     if (!repoInfo) {
         return LINGLONG_ERR(repoInfo);
@@ -260,6 +251,10 @@ linglong::utils::error::Result<void> OSTreeRepo::push(const package::Ref &ref)
 
     QString taskID;
     {
+        api::client::Schema_NewUploadTaskReq uploadReq;
+        uploadReq.setRef(ref.toString());
+        uploadReq.setRepoName(remoteRepoName);
+
         auto ret = newUploadTask(uploadReq);
         if (!ret) {
             return LINGLONG_ERR(ret);
@@ -304,16 +299,19 @@ char *OSTreeRepo::_formatted_time_remaining_from_seconds(guint64 seconds_remaini
 
     GString *description = g_string_new(NULL);
 
-    if (days_remaining)
+    if (days_remaining != 0U) {
         g_string_append_printf(description, "%" G_GUINT64_FORMAT " days ", days_remaining);
+    }
 
-    if (hours_remaining)
+    if (hours_remaining != 0U) {
         g_string_append_printf(description, "%" G_GUINT64_FORMAT " hours ", hours_remaining % 24);
+    }
 
-    if (minutes_remaining)
+    if (minutes_remaining != 0U) {
         g_string_append_printf(description,
                                "%" G_GUINT64_FORMAT " minutes ",
                                minutes_remaining % 60);
+    }
 
     g_string_append_printf(description, "%" G_GUINT64_FORMAT " seconds ", seconds_remaining % 60);
 
@@ -323,19 +321,18 @@ char *OSTreeRepo::_formatted_time_remaining_from_seconds(guint64 seconds_remaini
 void OSTreeRepo::progress_changed(OstreeAsyncProgress *progress, gpointer user_data)
 {
     g_autofree char *status = NULL;
-    gboolean caught_error, scanning;
-    guint outstanding_fetches;
-    guint outstanding_metadata_fetches;
-    guint outstanding_writes;
-    guint n_scanned_metadata;
-    guint fetched_delta_parts;
-    guint total_delta_parts;
-    guint fetched_delta_part_fallbacks;
-    guint total_delta_part_fallbacks;
+    gboolean caught_error = 0;
+    gboolean scanning = 0;
+    guint outstanding_fetches = 0;
+    guint outstanding_metadata_fetches = 0;
+    guint outstanding_writes = 0;
+    guint n_scanned_metadata = 0;
+    guint fetched_delta_parts = 0;
+    guint total_delta_parts = 0;
+    guint fetched_delta_part_fallbacks = 0;
+    guint total_delta_part_fallbacks = 0;
     guint new_progress = 0;
-    gboolean last_was_metadata =
-      GPOINTER_TO_UINT(g_object_get_data(G_OBJECT(progress), "last-was-metadata"));
-    char *formatted_bytes_sec = "0KB";
+    char const *formatted_bytes_sec = "0KB";
 
     g_autoptr(GString) buf = g_string_new("");
 
@@ -378,15 +375,18 @@ void OSTreeRepo::progress_changed(OstreeAsyncProgress *progress, gpointer user_d
     if (*status != '\0') {
         new_progress = 100;
         g_string_append(buf, status);
-    } else if (caught_error) {
+    } else if (caught_error != 0) {
         g_string_append_printf(buf, "Caught error, waiting for outstanding tasks");
-    } else if (outstanding_fetches) {
-        guint64 bytes_transferred, start_time, total_delta_part_size;
-        guint fetched, metadata_fetched, requested;
+    } else if (outstanding_fetches != 0U) {
+        guint64 bytes_transferred = 0;
+        guint64 start_time = 0;
+        guint64 total_delta_part_size = 0;
+        guint fetched = 0;
+        guint metadata_fetched = 0;
+        guint requested = 0;
         guint64 current_time = g_get_monotonic_time();
         g_autofree char *formatted_bytes_transferred = NULL;
-        // g_autofree char *formatted_bytes_sec = NULL;
-        guint64 bytes_sec;
+        guint64 bytes_sec = 0;
 
         /* Note: This is not atomic wrt the above getter call. */
         ostree_async_progress_get(progress,
@@ -438,9 +438,10 @@ void OSTreeRepo::progress_changed(OstreeAsyncProgress *progress, gpointer user_d
 
             if (bytes_sec > 0) {
                 guint64 est_time_remaining = 0;
-                if (total_delta_part_size > fetched_delta_part_size)
+                if (total_delta_part_size > fetched_delta_part_size) {
                     est_time_remaining =
                       (total_delta_part_size - fetched_delta_part_size) / bytes_sec;
+                }
                 g_autofree char *formatted_est_time_remaining =
                   _formatted_time_remaining_from_seconds(est_time_remaining);
                 /* No space between %s and remaining, since formatted_est_time_remaining has a
@@ -461,7 +462,7 @@ void OSTreeRepo::progress_changed(OstreeAsyncProgress *progress, gpointer user_d
                                        formatted_fetched,
                                        formatted_total);
             }
-        } else if (scanning || outstanding_metadata_fetches) {
+        } else if ((scanning != 0) || (outstanding_metadata_fetches != 0U)) {
             new_progress += 5;
             g_object_set_data(G_OBJECT(progress), "last-was-metadata", GUINT_TO_POINTER(TRUE));
             g_string_append_printf(buf,
@@ -479,13 +480,13 @@ void OSTreeRepo::progress_changed(OstreeAsyncProgress *progress, gpointer user_d
                                    formatted_bytes_transferred);
             new_progress = fetched * 97 / requested;
         }
-    } else if (outstanding_writes) {
+    } else if (outstanding_writes != 0U) {
         g_string_append_printf(buf, "Writing objects: %u", outstanding_writes);
     } else {
         g_string_append_printf(buf, "Scanning metadata: %u", n_scanned_metadata);
     }
 
-    OSTreeRepo *repo = static_cast<OSTreeRepo *>(user_data);
+    auto *repo = static_cast<OSTreeRepo *>(user_data);
     Q_EMIT repo->progressChanged(new_progress, QString("%1").arg(formatted_bytes_sec));
 }
 
@@ -497,7 +498,7 @@ linglong::utils::error::Result<void> OSTreeRepo::pull(package::Ref &ref, bool /*
     g_autoptr(GError) gErr = nullptr;
     auto str = ref.toOSTreeRefLocalString().toLocal8Bit();
     char *refs_to_fetch[2] = { str.data(), nullptr };
-    auto progress = ostree_async_progress_new_and_connect(progress_changed, (void *)this);
+    auto *progress = ostree_async_progress_new_and_connect(progress_changed, (void *)this);
     ostree_repo_pull(repoPtr.get(),
                      remoteRepoName.toLocal8Bit(),
                      refs_to_fetch,
@@ -506,47 +507,27 @@ linglong::utils::error::Result<void> OSTreeRepo::pull(package::Ref &ref, bool /*
                      NULL,
                      &gErr);
     ostree_async_progress_finish(progress);
-    if (gErr) {
-        qWarning() << gErr->code << gErr->message;
+    if (gErr != nullptr) {
         return LINGLONG_ERR("ostree_repo_pull", gErr);
     }
 
     return LINGLONG_OK;
 }
 
-linglong::utils::error::Result<void> OSTreeRepo::listRemoteRefs()
-{
-    g_autoptr(GHashTable) refs = NULL;
-    g_autoptr(GError) gErr = NULL;
-    ostree_repo_remote_list_refs(repoPtr.get(), remoteRepoName.toLocal8Bit(), &refs, NULL, &gErr);
-    if (gErr) {
-        qWarning() << gErr->code << gErr->message;
-        return LINGLONG_OK;
-    }
-    auto ordered_keys = g_hash_table_get_keys(refs);
-    ordered_keys = g_list_sort(ordered_keys, (GCompareFunc)strcmp);
-
-    for (auto iter = ordered_keys; iter; iter = iter->next) {
-        g_print("%s\n", (const char *)iter->data);
-    }
-
-    return LINGLONG_OK;
-}
-
-linglong::utils::error::Result<QList<package::Ref>> OSTreeRepo::listLocalRefs() noexcept
+linglong::utils::error::Result<QList<package::Reference>> OSTreeRepo::listLocalRefs() noexcept
 {
     LINGLONG_TRACE("list local refspecs");
 
     g_autoptr(GHashTable) table = NULL;
     g_autoptr(GError) gErr = NULL;
     ostree_repo_list_refs(repoPtr.get(), NULL, &table, NULL, &gErr);
-    if (gErr) {
+    if (gErr != nullptr) {
         return LINGLONG_ERR("ostree_repo_list_refs", gErr);
     }
 
-    auto ordered_keys = g_hash_table_get_keys(table);
+    auto *ordered_keys = g_hash_table_get_keys(table);
     QList<package::Ref> result;
-    for (auto iter = ordered_keys; iter; iter = iter->next) {
+    for (auto *iter = ordered_keys; iter != nullptr; iter = iter->next) {
         result.append(package::Ref((const char *)iter->data));
     }
     return result;
@@ -575,7 +556,7 @@ linglong::utils::error::Result<void> OSTreeRepo::pullAll(const package::Ref &ref
     return LINGLONG_OK;
 }
 
-linglong::utils::error::Result<void> OSTreeRepo::checkout(const package::Ref &ref,
+linglong::utils::error::Result<void> OSTreeRepo::checkout(const package::Reference &ref,
                                                           const QString &subPath,
                                                           const QString &target)
 {
@@ -608,7 +589,7 @@ linglong::utils::error::Result<void> OSTreeRepo::checkout(const package::Ref &re
                             (*rev).toStdString().c_str(),
                             NULL,
                             &gErr);
-    if (gErr) {
+    if (gErr != nullptr) {
         return LINGLONG_ERR("ostree_repo_checkout_at", gErr);
     }
 
@@ -650,7 +631,7 @@ linglong::utils::error::Result<QString> OSTreeRepo::remoteShowUrl(const QString 
     g_autofree char *out_url = nullptr;
     g_autoptr(GError) gErr = NULL;
     ostree_repo_remote_get_url(repoPtr.get(), repoName.toLocal8Bit(), &out_url, &gErr);
-    if (gErr) {
+    if (gErr != nullptr) {
         return LINGLONG_ERR("ostree_repo_remote_get_url", gErr);
     }
 
@@ -700,43 +681,75 @@ linglong::utils::error::Result<package::Ref> OSTreeRepo::localLatestRef(const pa
     return package::Ref("", defaultChannel, ref.appId, latestVer, ref.arch, ref.module);
 }
 
-linglong::utils::error::Result<package::Ref> OSTreeRepo::remoteLatestRef(const package::Ref &ref)
+utils::error::Result<package::Reference>
+OSTreeRepo::remoteLatestRef(const package::FuzzReference &fuzzRef)
 {
-    LINGLONG_TRACE(QString("get remote latest %1").arg(ref.toLocalString()));
+    LINGLONG_TRACE(QString("get remote latest %1").arg(fuzzRef.toString()));
 
-    QString latestVer = "unknown";
-    package::Ref queryRef(remoteRepoName, "main", ref.appId, ref.version, ref.arch, "");
-    auto ret = repoClient.QueryApps(queryRef);
+    if (fuzzRef.version && fuzzRef.version->tweak) {
+        // TODO(black_desk): better critical message
+        qCritical() << "Fuzz reference used to get remote latest version should not come with "
+                       "tweak version defined. This will lock version.";
+    }
 
-    if (!ret || (*ret).isEmpty()) {
-        ret = LINGLONG_ERR("use channel main", ret);
-        qWarning() << ret.error();
-        qWarning() << "fallback to channel linglong";
+    auto ret = repoClient.QueryApps(fuzzRef, remoteRepoName);
 
-        queryRef = package::Ref(remoteRepoName, "linglong", ref.appId, ref.version, ref.arch, "");
-        ret = repoClient.QueryApps(queryRef);
-        if (!ret) {
-            return LINGLONG_ERR("use channel linglong", ret);
+    if (ret && ret->empty() && fuzzRef.channel && *fuzzRef.channel == "main") {
+
+        qWarning() << fuzzRef.toString()
+                   << "not found at channel \"main\", fallback to use channel \"linglong\"";
+
+        auto fuzzRefWithChannelLinglong = fuzzRef;
+        fuzzRefWithChannelLinglong.channel = "linglong";
+
+        ret = repoClient.QueryApps(fuzzRefWithChannelLinglong, remoteRepoName);
+    }
+    if (!ret) {
+        return LINGLONG_ERR(ret);
+    }
+    if (ret->empty()) {
+        return LINGLONG_ERR("not found.");
+    }
+
+    const auto defaultVersion = package::Version::parse("0.0.0.0");
+    Q_ASSERT(defaultVersion.has_value());
+
+    auto latestVersion = package::Version::parse(QString::fromStdString(ret->front().version))
+                           .value_or(*defaultVersion);
+    size_t latestIndex = 0;
+    for (size_t i = 1; i < ret->size(); i++) {
+        qDebug() << "Found candidate:" << QString::fromStdString(ret->at(i).id)
+                 << QString::fromStdString(ret->at(i).version);
+
+        auto version = package::Version::parse(QString::fromStdString(ret->at(i).version));
+        if (!version) {
+            qCritical() << "invalid version from server:" << version.error();
+            Q_ASSERT(false);
+            continue;
         }
-        if (ret->isEmpty()) {
-            return LINGLONG_ERR("not found", -1);
+
+        auto architecture =
+          package::Architecture::parse(QString::fromStdString(ret->at(i).architecture));
+        if (!architecture) {
+            qCritical() << "invalid architecture from server:" << architecture.error();
+            Q_ASSERT(false);
+            continue;
+        }
+
+        if (latestVersion < *version) {
+            latestVersion = *version;
+            latestIndex = i;
         }
     }
 
-    for (const auto &info : *ret) {
-        qDebug() << "avilable resulets" << info->appId << info->channel << info->version;
-        Q_ASSERT(info != nullptr);
-        if (linglong::util::compareVersion(latestVer, info->version) < 0) {
-            latestVer = info->version;
-        }
-    }
+    auto info = ret->at(latestIndex);
+    auto architecture = package::Architecture::parse(QString::fromStdString(info.architecture));
+    Q_ASSERT(architecture.has_value());
 
-    return package::Ref(remoteRepoName,
-                        queryRef.channel,
-                        ref.appId,
-                        latestVer,
-                        ref.arch,
-                        ref.module);
+    return package::Reference::create(QString::fromStdString(info.channel),
+                                      QString::fromStdString(info.id),
+                                      latestVersion,
+                                      *architecture);
 }
 
 // 获取最新版本的ref, 版本号可以留空或传递latest
@@ -762,7 +775,7 @@ utils::error::Result<package::Ref> OSTreeRepo::latestOfRef(const QString &appId,
     }
 
     QStringList verDirs;
-    for (auto dir : appRoot.entryList(QDir::NoDotAndDotDot | QDir::Dirs)) {
+    for (const auto &dir : appRoot.entryList(QDir::NoDotAndDotDot | QDir::Dirs)) {
         if (version.isEmpty()) {
             verDirs.push_back(dir);
         } else if (dir.startsWith((version))) {
@@ -774,7 +787,7 @@ utils::error::Result<package::Ref> OSTreeRepo::latestOfRef(const QString &appId,
     }
 
     version = verDirs.value(0);
-    for (auto item : verDirs) {
+    for (const auto &item : verDirs) {
         linglong::util::AppVersion versionIter(item);
         linglong::util::AppVersion dstVersion(version);
         if (versionIter.isValid() && versionIter.isBigThan(dstVersion)) {
@@ -786,14 +799,14 @@ utils::error::Result<package::Ref> OSTreeRepo::latestOfRef(const QString &appId,
     return ref;
 }
 
-utils::error::Result<QString> OSTreeRepo::compressOstreeData(const package::Ref &ref)
+utils::error::Result<QString> OSTreeRepo::compressOstreeData(const package::Reference &ref)
 {
-    LINGLONG_TRACE(QString("compress %1").arg(ref.toSpecString()));
+    LINGLONG_TRACE(QString("compress %1").arg(ref.toString()));
 
     // check out ostree data
     // Fixme: use /tmp
     const auto savePath =
-      QStringList{ util::getUserFile(".linglong/builder"), ref.appId }.join(QDir::separator());
+      QStringList{ util::getUserFile(".linglong/builder"), ref.id }.join(QDir::separator());
     util::ensureDir(savePath);
     qInfo() << "print save path:" << savePath;
 
@@ -870,8 +883,8 @@ linglong::utils::error::Result<void> OSTreeRepo::repoPullbyCmd(const QString &de
     g_autoptr(GVariant) options = NULL;
     GVariantBuilder builder;
     g_variant_builder_init(&builder, G_VARIANT_TYPE("a{sv}"));
-    g_variant_builder_add(&builder, "{sv}", "http2", g_variant_new_boolean(false));
-    g_variant_builder_add(&builder, "{sv}", "gpg-verify", g_variant_new_boolean(false));
+    g_variant_builder_add(&builder, "{sv}", "http2", g_variant_new_boolean(FALSE));
+    g_variant_builder_add(&builder, "{sv}", "gpg-verify", g_variant_new_boolean(FALSE));
     options = g_variant_ref_sink(g_variant_builder_end(&builder));
     ostree_repo_open(tmpRepo, NULL, &gErr);
     if (gErr != nullptr) {
@@ -901,14 +914,14 @@ linglong::utils::error::Result<void> OSTreeRepo::repoPullbyCmd(const QString &de
     qInfo() << "repoPullbyCmd pull success";
 
     auto path = destPath + "/repo";
-    auto dest_repo_path = g_file_new_for_path(path.toStdString().c_str());
+    auto *dest_repo_path = g_file_new_for_path(path.toStdString().c_str());
     g_autoptr(OstreeRepo) repoDest = ostree_repo_new(dest_repo_path);
     ostree_repo_open(repoDest, NULL, &gErr);
     if (gErr != nullptr) {
         return LINGLONG_ERR("ostree_repo_open", gErr);
     }
 
-    g_autofree auto base_url = g_strconcat("file://", tmpPath->toStdString().c_str(), NULL);
+    g_autofree auto *base_url = g_strconcat("file://", tmpPath->toStdString().c_str(), NULL);
     builder = {};
     options = NULL;
     g_variant_builder_init(&builder, G_VARIANT_TYPE("a{sv}"));
@@ -964,21 +977,21 @@ linglong::utils::error::Result<void> OSTreeRepo::repoDeleteDatabyRef(const QStri
     }
 
     g_autoptr(GError) error = nullptr;
-
-    if (!ostree_repo_set_ref_immediate(repoPtr.get(),
-                                       nullptr,
-                                       ref.toLocal8Bit(),
-                                       nullptr,
-                                       nullptr,
-                                       &error)) {
-        return LINGLONG_ERR("repoDeleteDatabyRef: " + QString(QLatin1String(error->message)));
+    ostree_repo_set_ref_immediate(repoPtr.get(),
+                                  nullptr,
+                                  ref.toLocal8Bit(),
+                                  nullptr,
+                                  nullptr,
+                                  &error);
+    if (error != nullptr) {
+        return LINGLONG_ERR("ostree_repo_set_ref_immediate", error);
     }
 
     qInfo() << "repoDeleteDatabyRef delete " << ref << " success";
 
-    gint objectsTotal;
-    gint objectsPruned;
-    guint64 objsizeTotal;
+    gint objectsTotal = 0;
+    gint objectsPruned = 0;
+    guint64 objsizeTotal = 0;
     g_autofree char *formattedFreedSize = NULL;
     ostree_repo_prune(repoPtr.get(),
                       OSTREE_REPO_PRUNE_FLAGS_REFS_ONLY,
@@ -1001,115 +1014,6 @@ linglong::utils::error::Result<void> OSTreeRepo::repoDeleteDatabyRef(const QStri
     }
 
     return LINGLONG_OK;
-}
-
-/*
- * 查询远端 ostree 仓库描述文件 Summary 信息
- *
- * @param repo: 远端仓库对应的本地仓库 OstreeRepo 对象
- * @param name: 远端仓库名称
- * @param outSummary: 远端仓库的 Summary 信息
- * @param outSummarySig: 远端仓库的 Summary 签名信息
- * @param cancellable: GCancellable 对象
- * @param error: 错误信息
- *
- * @return bool: true:成功 false:失败
- */
-bool OSTreeRepo::fetchRemoteSummary(OstreeRepo *repo,
-                                    const char *name,
-                                    GBytes **outSummary,
-                                    GBytes **outSummarySig,
-                                    GCancellable *cancellable,
-                                    GError **error)
-{
-    g_autofree char *url = nullptr;
-    g_autoptr(GBytes) summary = nullptr;
-    g_autoptr(GBytes) summarySig = nullptr;
-
-    if (!ostree_repo_remote_get_url(repo, name, &url, error)) {
-        // fprintf(stdout, "fetchRemoteSummary ostree_repo_remote_get_url error:%s\n",
-        // (*error)->message);
-        qInfo() << "fetchRemoteSummary ostree_repo_remote_get_url error:" << (*error)->message;
-        return false;
-    }
-    // fprintf(stdout, "fetchRemoteSummary remote %s,url:%s\n", name, url);
-
-    if (!ostree_repo_remote_fetch_summary(repo, name, &summary, &summarySig, cancellable, error)) {
-        // fprintf(stdout, "fetchRemoteSummary ostree_repo_remote_fetch_summary error:%s\n",
-        // (*error)->message);
-        qInfo() << "fetchRemoteSummary ostree_repo_remote_fetch_summary error:"
-                << (*error)->message;
-        return false;
-    }
-
-    if (summary == nullptr) {
-        // fprintf(stdout, "fetch summary error");
-        qInfo() << "fetch summary error";
-        return false;
-    }
-    *outSummary = (GBytes *)g_steal_pointer(&summary);
-    if (outSummarySig)
-        *outSummarySig = (GBytes *)g_steal_pointer(&summarySig);
-    return true;
-}
-
-/*
- * 从 summary 中的 refMap 中获取仓库所有软件包索引 refs
- *
- * @param ref_map: summary 信息中解析出的 ref map 信息
- * @param outRefs: 仓库软件包索引信息
- */
-void OSTreeRepo::getPkgRefsFromRefsMap(GVariant *ref_map,
-                                       std::map<std::string, std::string> &outRefs)
-{
-    GVariant *value;
-    GVariantIter ref_iter;
-    g_variant_iter_init(&ref_iter, ref_map);
-    while ((value = g_variant_iter_next_value(&ref_iter)) != nullptr) {
-        /* helper for being able to auto-free the value */
-        g_autoptr(GVariant) child = value;
-        g_autofree char *ref_name = nullptr;
-        g_variant_get_child(child, 0, "&s", &ref_name);
-        if (ref_name == nullptr)
-            continue;
-        g_autofree char *ref = nullptr;
-        ostree_parse_refspec(ref_name, nullptr, &ref, nullptr);
-        if (ref == nullptr)
-            continue;
-        // gboolean is_app = g_str_has_prefix(ref, "app/");
-
-        g_autoptr(GVariant) csum_v = nullptr;
-        char tmp_checksum[65];
-        g_autofree const guchar *csum_bytes;
-        g_variant_get_child(child, 1, "(t@aya{sv})", nullptr, &csum_v, nullptr);
-        csum_bytes = ostree_checksum_bytes_peek_validate(csum_v, nullptr);
-        if (csum_bytes == nullptr)
-            continue;
-        ostree_checksum_inplace_from_bytes(csum_bytes, tmp_checksum);
-        // char *newRef = g_new0(char, 1);
-        // char* newRef = NULL;
-        // newRef = g_strdup(ref);
-        // g_hash_table_insert(ret_all_refs, newRef, g_strdup(tmp_checksum));
-        outRefs.insert(std::map<std::string, std::string>::value_type(ref, tmp_checksum));
-    }
-}
-
-/*
- * 从 ostree 仓库描述文件 Summary 信息中获取仓库所有软件包索引 refs
- *
- * @param summary: 远端仓库 Summary 信息
- * @param outRefs: 远端仓库软件包索引信息
- */
-void OSTreeRepo::getPkgRefsBySummary(GVariant *summary, std::map<std::string, std::string> &outRefs)
-{
-    // g_autoptr(GHashTable) ret_all_refs = NULL;
-    g_autoptr(GVariant) ref_map = nullptr;
-    // g_autoptr(GVariant) metadata = NULL;
-
-    // ret_all_refs = g_hash_table_new(linglong_collection_ref_hash, linglong_collection_ref_equal);
-    ref_map = g_variant_get_child_value(summary, 0);
-    // metadata = g_variant_get_child_value(summary, 1);
-    getPkgRefsFromRefsMap(ref_map, outRefs);
 }
 
 /*

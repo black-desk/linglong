@@ -10,8 +10,7 @@
 #include "linglong/dbus_ipc/package_manager_param.h"
 #include "linglong/dbus_ipc/param_option.h"
 #include "linglong/dbus_ipc/reply.h"
-#include "linglong/package/bundle.h"
-#include "linglong/package/ref.h"
+#include "linglong/package/reference.h"
 #include "linglong/repo/repo.h"
 #include "linglong/runtime/app.h"
 #include "linglong/util/error.h"
@@ -36,10 +35,9 @@ class AppManagerPrivate; /**< forward declaration AppManagerPrivate */
  * @details AppManager is a singleton class, and it is used to manage the package
  *          running state information.
  */
-class AppManager : public QObject, protected QDBusContext
+class AppManager : public QObject
 {
     Q_OBJECT
-    Q_CLASSINFO("D-Bus Interface", "org.deepin.linglong.AppManager")
 
 public:
     AppManager(repo::Repo &repo, ocppi::cli::CLI &ociCli);

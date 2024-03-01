@@ -6,11 +6,10 @@
 
 #include "repo_client.h"
 
-#include "linglong/package/package.h"
 #include "linglong/util/error.h"
 #include "linglong/util/file.h"
-#include "linglong/util/qserializer/deprecated.h"
 #include "linglong/utils/error/error.h"
+#include "linglong/utils/serialize/json.h"
 
 #include <QEventLoop>
 #include <QJsonObject>
@@ -22,21 +21,25 @@ namespace repo {
 
 using namespace api::client;
 
-QSERIALIZER_IMPL(Response);
-
-linglong::utils::error::Result<QList<QSharedPointer<package::AppMetaInfo>>>
-RepoClient::QueryApps(const package::Ref &ref)
+utils::error::Result<std::vector<api::types::v1::PackageInfo>>
+RepoClient::QueryApps(const package::FuzzReference &ref, const QString &remoteRepoName)
 {
     LINGLONG_TRACE("query apps");
 
     Request_FuzzySearchReq req;
-    req.setChannel(ref.channel);
-    req.setAppId(ref.appId);
-    req.setVersion(ref.version);
-    req.setArch(ref.arch);
-    req.setRepoName(ref.repo);
+    if (ref.channel) {
+        req.setChannel(*ref.channel);
+    }
+    req.setAppId(ref.id);
+    if (ref.version) {
+        req.setVersion(ref.version->toString());
+    }
+    if (ref.arch) {
+        req.setArch(ref.arch->toString());
+    }
+    req.setRepoName(remoteRepoName);
 
-    linglong::utils::error::Result<QList<QSharedPointer<package::AppMetaInfo>>> ret =
+    utils::error::Result<std::vector<api::types::v1::PackageInfo>> ret =
       LINGLONG_ERR("unknown error");
 
     QEventLoop loop;
@@ -50,16 +53,15 @@ RepoClient::QueryApps(const package::Ref &ref)
               ret = LINGLONG_ERR(resp.getMsg(), resp.getCode());
               return;
           }
-          QJsonObject obj = resp.asJsonObject();
-          QJsonDocument doc(obj);
-          auto bytes = doc.toJson();
-          auto respJson = util::loadJsonBytes<repo::Response>(bytes);
-          ret = respJson->data;
+
+          ret = utils::serialize::fromQJsonValue<std::vector<api::types::v1::PackageInfo>>(
+            api::client::toJsonValue(resp.getData()));
           return;
       },
       // 当 RepoClient 不在主线程时，要使用 BlockingQueuedConnection，避免QEventLoop::exec不工作
       // TODO(wurongjie) 将RepoClient和OStreeRepo改到主线程工作
       loop.thread() == client.thread() ? Qt::AutoConnection : Qt::BlockingQueuedConnection);
+
     QEventLoop::connect(
       &client,
       &ClientApi::fuzzySearchAppSignalEFull,
@@ -69,6 +71,7 @@ RepoClient::QueryApps(const package::Ref &ref)
           ret = LINGLONG_ERR(error_str, error_type);
       },
       loop.thread() == client.thread() ? Qt::AutoConnection : Qt::BlockingQueuedConnection);
+
     client.fuzzySearchApp(req);
     loop.exec();
     return ret;

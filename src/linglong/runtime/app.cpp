@@ -12,8 +12,6 @@
 #include "linglong/repo/repo.h"
 #include "linglong/runtime/app_config.h"
 #include "linglong/util/file.h"
-#include "linglong/util/qserializer/json.h"
-#include "linglong/util/qserializer/yaml.h"
 #include "linglong/util/uuid.h"
 #include "linglong/util/version/version.h"
 #include "linglong/util/xdg.h"
@@ -54,11 +52,6 @@ static void initQResource()
 }
 
 namespace linglong::runtime {
-
-QSERIALIZER_IMPL(App);
-QSERIALIZER_IMPL(AppPermission);
-QSERIALIZER_IMPL(Layer);
-QSERIALIZER_IMPL(MountYaml);
 
 namespace PrivateAppInit {
 auto init() -> int

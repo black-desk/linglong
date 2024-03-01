@@ -8,6 +8,5 @@
 
 namespace linglong {
 namespace runtime {
-QSERIALIZER_IMPL(AppConfig);
 }
 } // namespace linglong

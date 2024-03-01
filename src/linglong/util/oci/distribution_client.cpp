@@ -8,19 +8,11 @@
 
 #include "linglong/util/file.h"
 #include "linglong/util/http/http_client.h"
-#include "linglong/util/qserializer/json.h"
 #include "linglong/util/sysinfo.h"
 
 #include <QUrlQuery>
 
 namespace linglong::oci {
-
-QSERIALIZER_IMPL(OciDistributionClientManifestItemPlatform);
-QSERIALIZER_IMPL(OciDistributionClientManifestListItem);
-QSERIALIZER_IMPL(OciDistributionClientManifestList);
-QSERIALIZER_IMPL(OciDistributionClientManifestFsLayer);
-QSERIALIZER_IMPL(OciDistributionClientManifestLayer);
-QSERIALIZER_IMPL(OciDistributionClientManifest);
 
 static auto kSupportManifestVersion = 2;
 

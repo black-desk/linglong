@@ -7,7 +7,7 @@
 #ifndef LINGLONG_SRC_PACKAGE_MANAGER_IMPL_APP_STATUS_H_
 #define LINGLONG_SRC_PACKAGE_MANAGER_IMPL_APP_STATUS_H_
 
-#include "linglong/package/package.h"
+// #include "linglong/package/package.h"
 
 #include <QDateTime>
 #include <QJsonArray>

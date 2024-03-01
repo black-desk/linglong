@@ -7,7 +7,6 @@
 #include <gtest/gtest.h>
 
 #include "linglong/util/oci/distribution_client.h"
-#include "linglong/util/qserializer/json.h"
 #include "linglong/util/sysinfo.h"
 #include "linglong/util/test/tool.h"
 

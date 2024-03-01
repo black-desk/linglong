@@ -7,7 +7,6 @@
 #include <gtest/gtest.h>
 
 #include "linglong/runtime/app.h"
-#include "linglong/util/qserializer/yaml.h"
 
 #include <QDebug>
 #include <QFile>

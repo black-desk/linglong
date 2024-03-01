@@ -38,7 +38,7 @@ private:
     // FIXME: We should not use ostree repo in ll-builder, we should use the repo interface
     repo::OSTreeRepo &ostree;
     cli::Printer &printer;
-    package::Ref ref;
+    package::Reference ref;
     QScopedPointer<DependFetcherPrivate> dd_ptr;
     Q_DECLARE_PRIVATE_D(qGetPtrHelper(dd_ptr), DependFetcher)
 };

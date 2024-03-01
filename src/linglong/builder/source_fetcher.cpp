@@ -22,24 +22,22 @@
 namespace linglong {
 namespace builder {
 
-QString SourceFetcherPrivate::fixSuffix(const QFileInfo &fi)
+QString SourceFetcher::fixSuffix(const QFileInfo &fi)
 {
-    Q_Q(SourceFetcher);
-    for (const char *suffix : { q->CompressedFileTarXz,
-                                q->CompressedFileTarBz2,
-                                q->CompressedFileTarGz,
-                                q->CompressedFileTgz,
-                                q->CompressedFileTar }) {
+    for (const char *suffix : { CompressedFileTarXz,
+                                CompressedFileTarBz2,
+                                CompressedFileTarGz,
+                                CompressedFileTgz,
+                                CompressedFileTar }) {
         if (fi.completeSuffix().endsWith(suffix)) {
-            return q->CompressedFileTar;
+            return CompressedFileTar;
         }
     }
     return fi.suffix();
 }
 
-linglong::util::Error SourceFetcherPrivate::extractFile(const QString &path, const QString &dir)
+linglong::utils::Result<void> SourceFetcher::extractFile(const QString &path, const QString &dir)
 {
-    Q_Q(SourceFetcher);
     QFileInfo fi(path);
 
     auto tarxz = [](const QString &path, const QString &dir) -> linglong::util::Error {
@@ -61,9 +59,9 @@ linglong::util::Error SourceFetcherPrivate::extractFile(const QString &path, con
 
     QMap<QString, std::function<linglong::util::Error(const QString &path, const QString &dir)>>
       subcommandMap = {
-          { q->CompressedFileTarXz, tarxz },   { q->CompressedFileTarGz, targz },
-          { q->CompressedFileTarBz2, tarbz2 }, { q->CompressedFileZip, zip },
-          { q->CompressedFileTgz, targz },     { q->CompressedFileTar, tarxz },
+          { CompressedFileTarXz, tarxz },   { q->CompressedFileTarGz, targz },
+          { CompressedFileTarBz2, tarbz2 }, { q->CompressedFileZip, zip },
+          { q->CompressedFileTgz, targz },  { q->CompressedFileTar, tarxz },
       };
 
     auto suffix = fixSuffix(fi);

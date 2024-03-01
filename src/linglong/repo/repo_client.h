@@ -8,7 +8,8 @@
 #define LINGLONG_SRC_MODULE_REPO_REPO_CLIENT_H_
 
 #include "ClientApi.h"
-#include "linglong/package/ref.h"
+#include "linglong/api/types/v1/PackageInfo.hpp"
+#include "linglong/package/fuzz_reference.h"
 #include "linglong/repo/repo.h"
 #include "linglong/utils/error/error.h"
 
@@ -19,15 +20,6 @@
 
 namespace linglong {
 namespace repo {
-
-class Response : public JsonSerialize
-{
-    Q_OBJECT;
-    Q_JSON_CONSTRUCTOR(Response)
-public:
-    Q_JSON_PROPERTY(int, code);
-    Q_JSON_PROPERTY(QList<QSharedPointer<linglong::package::AppMetaInfo>>, data);
-};
 
 class RepoClient : public QObject
 {
@@ -41,8 +33,8 @@ public:
     // It's not thread-safe.
     void setEndpoint(const QString &endpoint);
 
-    linglong::utils::error::Result<QList<QSharedPointer<package::AppMetaInfo>>>
-    QueryApps(const package::Ref &ref);
+    utils::error::Result<std::vector<api::types::v1::PackageInfo>>
+    QueryApps(const package::FuzzReference &ref, const QString &remoteRepoName);
 
 private:
     api::client::ClientApi &client;
@@ -51,5 +43,4 @@ private:
 } // namespace repo
 } // namespace linglong
 
-Q_JSON_DECLARE_PTR_METATYPE_NM(linglong::repo, Response)
 #endif // LINGLONG_SRC_MODULE_REPO_REPO_CLIENT_H_

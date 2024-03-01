@@ -7,13 +7,11 @@
 #ifndef LINGLONG_SRC_MODULE_REPO_OSTREE_REPO_H_
 #define LINGLONG_SRC_MODULE_REPO_OSTREE_REPO_H_
 
-#include "linglong/package/package.h"
-#include "linglong/package/ref.h"
+#include "linglong/package/reference.h"
 #include "linglong/repo/repo.h"
 #include "linglong/repo/repo_client.h"
 #include "linglong/util/erofs.h"
 #include "linglong/util/file.h"
-#include "linglong/util/qserializer/json.h"
 #include "linglong/utils/error/error.h"
 
 #include <ostree.h>
@@ -24,74 +22,6 @@
 #include <QProcess>
 #include <QScopedPointer>
 #include <QThread>
-
-namespace linglong {
-namespace repo {
-
-class RevPair : public JsonSerialize
-{
-    Q_OBJECT;
-    Q_JSON_CONSTRUCTOR(RevPair)
-
-    Q_JSON_PROPERTY(QString, server);
-    Q_JSON_PROPERTY(QString, client);
-};
-
-class UploadResponseData : public Serialize
-{
-    Q_OBJECT;
-    Q_JSON_CONSTRUCTOR(UploadResponseData)
-
-    Q_JSON_PROPERTY(QString, id);
-    Q_JSON_PROPERTY(QString, watchId);
-    Q_JSON_PROPERTY(QString, status);
-};
-
-} // namespace repo
-} // namespace linglong
-
-Q_JSON_DECLARE_PTR_METATYPE_NM(linglong::repo, RevPair)
-Q_JSON_DECLARE_PTR_METATYPE_NM(linglong::repo, UploadResponseData)
-
-namespace linglong {
-namespace repo {
-
-class UploadTaskRequest : public JsonSerialize
-{
-    Q_OBJECT;
-    Q_JSON_CONSTRUCTOR(UploadTaskRequest)
-
-    Q_JSON_PROPERTY(int, code);
-    Q_JSON_PROPERTY(QStringList, objects);
-    Q_PROPERTY(QMap<QString, QSharedPointer<linglong::repo::RevPair>> refs MEMBER refs);
-    QMap<QString, QSharedPointer<linglong::repo::RevPair>> refs;
-};
-
-class UploadRequest : public JsonSerialize
-{
-    Q_OBJECT;
-    Q_JSON_CONSTRUCTOR(UploadRequest)
-
-    Q_JSON_PROPERTY(QString, repoName);
-    Q_JSON_PROPERTY(QString, ref);
-};
-
-class UploadTaskResponse : public Serialize
-{
-    Q_OBJECT;
-    Q_JSON_CONSTRUCTOR(UploadTaskResponse)
-
-    Q_JSON_PROPERTY(int, code);
-    Q_JSON_PROPERTY(QString, msg);
-    Q_JSON_PTR_PROPERTY(linglong::repo::UploadResponseData, data);
-};
-
-} // namespace repo
-} // namespace linglong
-
-Q_JSON_DECLARE_PTR_METATYPE_NM(linglong::repo, UploadRequest)
-Q_JSON_DECLARE_PTR_METATYPE_NM(linglong::repo, UploadTaskRequest)
-Q_JSON_DECLARE_PTR_METATYPE_NM(linglong::repo, UploadTaskResponse)
 
 namespace linglong {
 namespace repo {
@@ -115,54 +45,55 @@ public:
     };
 
     explicit OSTreeRepo(const QString &localRepoPath,
-                        const config::ConfigV1 &cfg,
+                        const api::types::v1::RepoConfig &cfg,
                         api::client::ClientApi &client);
 
     ~OSTreeRepo() override;
 
-    config::ConfigV1 getConfig() const noexcept override;
-    linglong::utils::error::Result<void> setConfig(const config::ConfigV1 &cfg) noexcept override;
+    api::types::v1::RepoConfig getConfig() const noexcept override;
+    utils::error::Result<void> setConfig(const api::types::v1::RepoConfig &cfg) noexcept override;
 
-    linglong::utils::error::Result<void> listRemoteRefs();
-    linglong::utils::error::Result<QList<package::Ref>> listLocalRefs() noexcept override;
+    utils::error::Result<QList<package::Reference>> listLocalRefs() noexcept override;
 
-    linglong::utils::error::Result<void> importRef(const package::Ref &oldRef,
-                                                   const package::Ref &newRef);
+    utils::error::Result<void> importRef(const package::Reference &oldRef,
+                                         const package::Reference &newRef);
 
-    linglong::utils::error::Result<void> importDirectory(const package::Ref &ref,
-                                                         const QString &path) override;
+    utils::error::Result<void> importDirectory(const package::Reference &ref,
+                                               const QString &path) override;
 
-    linglong::utils::error::Result<void> commit(const Tree treeType,
-                                                const package::Ref &ref,
-                                                const QString &path,
-                                                const package::Ref &oldRef);
+    utils::error::Result<void> commit(const Tree treeType,
+                                      const package::Reference &ref,
+                                      const QString &path,
+                                      const package::Reference &oldRef);
 
-    linglong::utils::error::Result<void> push(const package::Ref &ref) override;
+    utils::error::Result<void> push(const package::Reference &reference) override;
 
-    linglong::utils::error::Result<void> pull(package::Ref &ref, bool force) override;
+    utils::error::Result<void> pull(package::Reference &ref, bool force) override;
 
-    linglong::utils::error::Result<void> pullAll(const package::Ref &ref, bool force) override;
+    utils::error::Result<void> pullAll(const package::Reference &ref, bool force) override;
 
-    linglong::utils::error::Result<void> checkout(const package::Ref &ref,
-                                                  const QString &subPath,
-                                                  const QString &target) override;
+    utils::error::Result<void> checkout(const package::Reference &ref,
+                                        const QString &subPath,
+                                        const QString &target) override;
 
-    linglong::utils::error::Result<void> checkoutAll(const package::Ref &ref,
-                                                     const QString &subPath,
-                                                     const QString &target) override;
+    utils::error::Result<void> checkoutAll(const package::Reference &ref,
+                                           const QString &subPath,
+                                           const QString &target) override;
 
-    linglong::utils::error::Result<QString> compressOstreeData(const package::Ref &ref);
+    utils::error::Result<QString> compressOstreeData(const package::Reference &ref);
 
-    QString rootOfLayer(const package::Ref &ref) override;
+    QString rootOfLayer(const package::Reference &ref) override;
 
-    linglong::utils::error::Result<QString> remoteShowUrl(const QString &repoName) override;
+    utils::error::Result<QString> remoteShowUrl(const QString &repoName) override;
 
-    linglong::utils::error::Result<package::Ref> localLatestRef(const package::Ref &ref) override;
+    utils::error::Result<package::Reference>
+    localLatestRef(const package::FuzzReference &ref) override;
 
-    linglong::utils::error::Result<package::Ref> remoteLatestRef(const package::Ref &ref) override;
+    utils::error::Result<package::Reference>
+    remoteLatestRef(const package::FuzzReference &fuzzRef) override;
 
-    utils::error::Result<package::Ref> latestOfRef(const QString &appId,
-                                                   const QString &appVersion) override;
+    utils::error::Result<package::Reference> latestOfRef(const QString &appId,
+                                                         const QString &appVersion) override;
 
     /*
      * 查询ostree远端仓库列表
@@ -173,7 +104,7 @@ public:
      *
      * @return bool: true:查询成功 false:失败
      */
-    linglong::utils::error::Result<void> getRemoteRepoList(QVector<QString> &vec) override;
+    utils::error::Result<void> getRemoteRepoList(QVector<QString> &vec) override;
 
     /*
      * 通过ostree命令将软件包数据从远端仓库pull到本地
@@ -185,9 +116,9 @@ public:
      *
      * @return bool: true:成功 false:失败
      */
-    linglong::utils::error::Result<void> repoPullbyCmd(const QString &destPath,
-                                                       const QString &remoteName,
-                                                       const QString &ref) override;
+    utils::error::Result<void> repoPullbyCmd(const QString &destPath,
+                                             const QString &remoteName,
+                                             const QString &ref) override;
 
     /*
      * 删除本地repo仓库中软件包对应的ref分支信息及数据
@@ -199,10 +130,10 @@ public:
      *
      * @return bool: true:成功 false:失败
      */
-    linglong::utils::error::Result<void> repoDeleteDatabyRef(const QString &repoPath,
-                                                             const QString &ref) override;
+    utils::error::Result<void> repoDeleteDatabyRef(const QString &repoPath,
+                                                   const QString &ref) override;
 
-    linglong::utils::error::Result<void> initCreateRepoIfNotExists();
+    utils::error::Result<void> initCreateRepoIfNotExists();
 
     /*
      * 获取下载任务对应的进程Id
@@ -240,104 +171,15 @@ public:
 
 private:
     /*
-     * 查询远端ostree仓库描述文件Summary信息
-     *
-     * @param repo: 远端仓库对应的本地仓库OstreeRepo对象
-     * @param name: 远端仓库名称
-     * @param outSummary: 远端仓库的Summary信息
-     * @param outSummarySig: 远端仓库的Summary签名信息
-     * @param cancellable: GCancellable对象
-     * @param error: 错误信息
-     *
-     * @return bool: true:成功 false:失败
-     */
-    bool fetchRemoteSummary(OstreeRepo *repo,
-                            const char *name,
-                            GBytes **outSummary,
-                            GBytes **outSummarySig,
-                            GCancellable *cancellable,
-                            GError **error);
-
-    /*
-     * 从ostree仓库描述文件Summary信息中获取仓库所有软件包索引refs
-     *
-     * @param summary: 远端仓库Summary信息
-     * @param outRefs: 远端仓库软件包索引信息
-     */
-    void getPkgRefsBySummary(GVariant *summary, std::map<std::string, std::string> &outRefs);
-
-    /*
-     * 从summary中的refMap中获取仓库所有软件包索引refs
-     *
-     * @param ref_map: summary信息中解析出的ref map信息
-     * @param outRefs: 仓库软件包索引信息
-     */
-    void getPkgRefsFromRefsMap(GVariant *ref_map, std::map<std::string, std::string> &outRefs);
-
-    /*
-     * 解析仓库软件包索引ref信息
-     *
-     * @param fullRef: 目标软件包索引ref信息
-     * @param result: 解析结果
-     *
-     * @return bool: true:成功 false:失败
-     */
-    bool resolveRef(const std::string &fullRef, std::vector<std::string> &result);
-
-    /*
      * 在/tmp目录下创建一个临时repo子仓库
      *
      * @param parentRepo: 父repo仓库路径
      *
      * @return QString: 临时repo路径
      */
-    linglong::utils::error::Result<QString> createTmpRepo(const QString &parentRepo);
+    static utils::error::Result<QString> createTmpRepo(const QString &parentRepo);
 
-    QString getObjectPath(const QString &objName)
-    {
-        return QDir::cleanPath(
-          QStringList{ ostreePath, "objects", objName.left(2), objName.right(objName.length() - 2) }
-            .join(QDir::separator()));
-    }
-
-    // FIXME: return {Error, QStringList}
-    QStringList traverseCommit(const QString &rev, int maxDepth)
-    {
-        g_autoptr(GHashTable) hashTable = nullptr;
-        g_autoptr(GError) gErr = nullptr;
-        QStringList objects;
-
-        std::string str = rev.toStdString();
-
-        if (!ostree_repo_traverse_commit(repoPtr.get(),
-                                         str.c_str(),
-                                         maxDepth,
-                                         &hashTable,
-                                         nullptr,
-                                         &gErr)) {
-            qCritical() << "ostree_repo_traverse_commit failed"
-                        << "rev" << rev << QString::fromStdString(std::string(gErr->message));
-            return {};
-        }
-
-        GHashTableIter iter;
-        g_hash_table_iter_init(&iter, hashTable);
-
-        g_autoptr(GVariant) object;
-        for (; g_hash_table_iter_next(&iter, reinterpret_cast<gpointer *>(&object), nullptr);) {
-            g_autofree char *checksum;
-            OstreeObjectType objectType;
-
-            // TODO: check error
-            g_variant_get(object, "(su)", &checksum, &objectType);
-            QString objectName(ostree_object_to_string(checksum, objectType));
-            objects.push_back(objectName);
-        }
-
-        return objects;
-    }
-
-    linglong::utils::error::Result<QString> resolveRev(const QString &ref)
+    utils::error::Result<QString> resolveRev(const QString &ref)
     {
         LINGLONG_TRACE(QString("resolve refspec %1").arg(ref));
 
@@ -351,7 +193,7 @@ private:
         return QString::fromUtf8(commitID);
     }
 
-    linglong::utils::error::Result<QSharedPointer<api::client::GetRepo_200_response>>
+    utils::error::Result<QSharedPointer<api::client::GetRepo_200_response>>
     getRepoInfo(const QString &repoName)
     {
         LINGLONG_TRACE("get repo");
@@ -390,7 +232,7 @@ private:
         return ret;
     }
 
-    linglong::utils::error::Result<QString> getToken()
+    utils::error::Result<QString> getToken()
     {
         LINGLONG_TRACE("get token");
 
@@ -432,7 +274,7 @@ private:
         return ret;
     }
 
-    linglong::utils::error::Result<QString> newUploadTask(QSharedPointer<UploadRequest> req)
+    utils::error::Result<QString> newUploadTask(const api::client::Schema_NewUploadTaskReq &req)
     {
         LINGLONG_TRACE("new upload task");
 
@@ -462,16 +304,12 @@ private:
               ret = LINGLONG_ERR(error_str, error_type);
           },
           loop.thread() == apiClient.thread() ? Qt::AutoConnection : Qt::BlockingQueuedConnection);
-        api::client::Schema_NewUploadTaskReq taskReq;
-        taskReq.setRef(req->ref);
-        taskReq.setRepoName(req->repoName);
-        apiClient.newUploadTaskID(remoteToken, taskReq);
+        apiClient.newUploadTaskID(remoteToken, req);
         loop.exec();
         return ret;
     }
 
-    linglong::utils::error::Result<void> doUploadTask(const QString &taskID,
-                                                      const QString &filePath)
+    utils::error::Result<void> doUploadTask(const QString &taskID, const QString &filePath)
     {
         LINGLONG_TRACE("do upload task");
 
@@ -510,7 +348,7 @@ private:
         return ret;
     }
 
-    static void cleanUploadTask(const package::Ref &ref, const QString &filePath)
+    static void cleanUploadTask(const package::Reference &ref, const QString &filePath)
     {
         const auto savePath =
           QStringList{ util::getUserFile(".linglong/builder"), ref.appId }.join(QDir::separator());
@@ -527,7 +365,7 @@ private:
         }
     }
 
-    linglong::utils::error::Result<void> getUploadStatus(const QString &taskID)
+    utils::error::Result<void> getUploadStatus(const QString &taskID)
     {
         LINGLONG_TRACE("get upload status");
 
@@ -588,7 +426,7 @@ Q_SIGNALS:
     void progressChanged(const uint &progress, const QString &speed);
 
 private:
-    config::ConfigV1 cfg;
+    api::types::v1::RepoConfig cfg;
     QString repoRootPath;
     QString remoteEndpoint;
     QString remoteRepoName;

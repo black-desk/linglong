@@ -6,9 +6,10 @@
 
 #include "linglong/package/layer_packager.h"
 
-#include "linglong/package/layer_info.h"
+#include "linglong/api/types/v1/Generators.hpp"
 #include "linglong/util/file.h"
 #include "linglong/util/runner.h"
+#include "linglong/utils/command/env.h"
 
 #include <QDataStream>
 
@@ -30,77 +31,62 @@ LayerPackager::pack(const LayerDir &dir, const QString &layerFilePath) const
 {
     LINGLONG_TRACE("pack layer");
 
+    QFile layer(layerFilePath);
+    if (!layer.open(QIODevice::WriteOnly | QIODevice::Append)) {
+        return LINGLONG_ERR(layer);
+    }
+
+    if (layer.write(magicNumber) < 0) {
+        return LINGLONG_ERR(layer);
+    }
+
+    auto info = dir.info();
+    if (!info) {
+        return LINGLONG_ERR(info);
+    }
+
+    auto json = nlohmann::json(*info);
+    auto data = QByteArray::fromStdString(json.dump());
+
+    QByteArray dataSizeBytes;
+
+    QDataStream dataSizeStream(&dataSizeBytes, QIODevice::WriteOnly);
+    dataSizeStream.setVersion(QDataStream::Qt_5_10);
+    dataSizeStream << quint32(data.size());
+
+    Q_ASSERT(dataSizeStream.status() == QDataStream::Status::Ok);
+
+    if (layer.write(dataSizeBytes) < 0) {
+        return LINGLONG_ERR(layer);
+    }
+
+    if (layer.write(data) < 0) {
+        return LINGLONG_ERR(layer);
+    }
+
+    layer.close();
+
     // compress data with erofs
     const auto compressedFilePath =
       QStringList{ this->workDir, "tmp.erofs" }.join(QDir::separator());
 
-    auto ret = util::Exec("mkfs.erofs",
-                          { "-zlz4hc,9", compressedFilePath, dir.absolutePath() },
-                          15 * 60 * 1000);
-    if (ret) {
-        return LINGLONG_ERR("mkfs.erofs: " + ret.message(), ret.code());
+    auto ret =
+      utils::command::Exec("mkfs.erofs", { "-zlz4hc,9", compressedFilePath, dir.absolutePath() });
+    if (!ret) {
+        return LINGLONG_ERR(ret);
     }
 
-    // generate LayerInfo
-    layer::LayerInfo layerInfo;
-    layerInfo.version = layerInfoVerison;
-
-    auto rawData = dir.rawInfo();
-    if (!rawData) {
-        return LINGLONG_ERR(rawData);
+    ret = utils::command::Exec(
+      "sh",
+      { "-c", QString("cat %1 >> %2").arg(compressedFilePath, layerFilePath) });
+    if (!ret) {
+        LINGLONG_ERR(ret);
     }
 
-    // rawData is not checked format
-    layerInfo.info = nlohmann::json::parse(*rawData);
+    auto result = LayerFile::New(layerFilePath);
+    Q_ASSERT(result.has_value());
 
-    auto layerInfoData = toJson(layerInfo);
-    if (!layerInfoData) {
-        return LINGLONG_ERR(layerInfoData);
-    }
-    // write data, [magic number |LayerInfoSize | LayerInfo | compressed data ]
-    // open temprary layer file
-    QFile layer(layerFilePath);
-    if (!layer.open(QIODevice::WriteOnly | QIODevice::Append)) {
-        return LINGLONG_ERR("open temporary layer file", layer);
-    }
-    // write magic number, in 40 bytes
-    layer.write(magicNumber);
-
-    // write size of LayerInfo, in 4 bytes
-    QDataStream out(&layer);
-    quint32 layerInfoSize = (*layerInfoData).size();
-    out.writeRawData(reinterpret_cast<const char *>(&layerInfoSize), sizeof(quint32));
-
-    // write LayerInfo
-    layer.write(*layerInfoData);
-    QFile compressedFile(compressedFilePath);
-    if (!compressedFile.open(QIODevice::ReadOnly)) {
-        return LINGLONG_ERR("open compressed layer file", compressedFile);
-    }
-
-    // write compressedFile
-    qint64 chunkSize = 2 * 1024 * 1024;
-    qint64 remainingSize = compressedFile.size();
-    qint64 compressedFileOffset = 0;
-
-    while (remainingSize > 0) {
-        qint64 sizeToRead = qMin(chunkSize, remainingSize);
-        uchar *compressedData = compressedFile.map(compressedFileOffset, sizeToRead);
-        if (!compressedData) {
-            return LINGLONG_ERR("mapping compressed file", compressedFile);
-        }
-
-        auto ret = layer.write(reinterpret_cast<char *>(compressedData), sizeToRead);
-        if (ret < 0) {
-            return LINGLONG_ERR("writing data to temporary layer file", layer);
-        }
-
-        remainingSize -= sizeToRead;
-        compressedFileOffset += sizeToRead;
-    }
-
-    // it seems no error here, so i didn't check it
-    return LayerFile::openLayer(layerFilePath);
+    return result;
 }
 
 utils::error::Result<QSharedPointer<LayerDir>> LayerPackager::unpack(LayerFile &file,
@@ -113,10 +99,11 @@ utils::error::Result<QSharedPointer<LayerDir>> LayerPackager::unpack(LayerFile &
 
     QFileInfo fileInfo(file);
 
-    auto offset = file.layerOffset();
+    auto offset = file.binaryDataOffset();
     if (!offset) {
         return LINGLONG_ERR(offset);
     }
+
     auto ret =
       util::Exec("erofsfuse",
                  { QString("--offset=%1").arg(*offset), fileInfo.absoluteFilePath(), unpackDir });

@@ -6,6 +6,8 @@
 
 #include "package_manager.h"
 
+#include "linglong/api/types/v1/PackageManager1ModifyRepoParameters.hpp"
+#include "linglong/api/types/v1/PackageManager1ModifyRepoResult.hpp"
 #include "linglong/dbus_ipc/dbus_system_helper_common.h"
 #include "linglong/dbus_ipc/param_option.h"
 #include "linglong/package/layer_file.h"
@@ -14,12 +16,12 @@
 #include "linglong/util/app_status.h"
 #include "linglong/util/appinfo_cache.h"
 #include "linglong/util/file.h"
-#include "linglong/util/qserializer/json.h"
 #include "linglong/util/runner.h"
 #include "linglong/util/status_code.h"
 #include "linglong/util/sysinfo.h"
 #include "linglong/util/version/semver.h"
 #include "linglong/util/version/version.h"
+#include "linglong/utils/serialize/json.h"
 
 #include <QDBusInterface>
 #include <QDBusReply>
@@ -491,55 +493,37 @@ PackageManager::PackageManager(api::dbus::v1::PackageManagerHelper &helper,
     linglong::util::checkAppCache();
 }
 
-auto PackageManager::getRepoInfo() -> QueryReply
+auto PackageManager::getRepoInfo() -> QVariantMap
 {
-    QueryReply reply;
     const auto &config = repoMan.getConfig();
-
-    // FIXME(black_desk):
-    // This is a workaround, we may have multiple repositories.
-    reply.code = STATUS_CODE(kSuccess);
-    reply.message = QString::fromStdString(config.defaultRepo);
-    reply.result = QString::fromStdString(config.repos.at(config.defaultRepo));
-
-    return reply;
+    auto result =
+      api::types::v1::PackageManager1GetRepoInfoResult{ 0,
+                                                        "",
+                                                        { config.defaultRepo, config.repos } };
+    return utils::serialize::toQVariantMap(result);
 }
 
-auto PackageManager::ModifyRepo(const QString &name, const QString &url) -> Reply
+auto PackageManager::ModifyRepo(const QVariantMap &_parameters) -> QVariantMap
 {
-    Reply reply;
-
-    // if url ends with '/', remove it
-    const auto formatUrl = url.endsWith('/') ? url.left(url.lastIndexOf('/')) : url;
-    QUrl endpointUrl(formatUrl);
-    if (name.trimmed().isEmpty()
-        || (endpointUrl.scheme().toLower() != "http" && endpointUrl.scheme().toLower() != "https")
-        || !endpointUrl.isValid()) {
-        reply.message = "url format error";
-        qWarning() << reply.message;
-        reply.code = STATUS_CODE(kUserInputParamErr);
-        return reply;
-    }
+    auto parameters =
+      utils::serialize::fromQVariantMap<api::types::v1::PackageManager1ModifyRepoParameters>(
+        _parameters);
 
     auto cfg = this->repoMan.getConfig();
-
-    cfg.defaultRepo = name.toStdString();
-    cfg.repos[cfg.defaultRepo] = formatUrl.toStdString();
+    cfg.defaultRepo = parameters.defaultRepo;
+    cfg.repos = parameters.repos;
 
     auto res = this->repoMan.setConfig(cfg);
-    if (!res.has_value()) {
-        qCritical() << res.error();
-        reply.message = "internal error";
-        reply.code = -1;
-        return reply;
+    if (!res) {
+        return utils::serialize::toQVariantMap(
+          api::types::v1::PackageManager1ModifyRepoResult{ res.error().code(),
+                                                           res.error().message().toStdString() });
     }
 
-    this->remoteRepoName = name;
+    this->remoteRepoName = QString::fromStdString(cfg.defaultRepo);
 
-    qDebug() << QString("modify repo name:%1 url:%2 success").arg(name, url);
-    reply.code = STATUS_CODE(kErrorModifyRepoSuccess);
-    reply.message = "modify repo url success";
-    return reply;
+    return utils::serialize::toQVariantMap(
+      api::types::v1::PackageManager1ModifyRepoResult{ 0, "" });
 }
 
 auto PackageManager::GetDownloadStatus(const ParamOption &paramOption, int type) -> Reply

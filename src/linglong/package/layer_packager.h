@@ -19,7 +19,7 @@ class LayerPackager : public QObject
 {
 public:
     explicit LayerPackager(const QString &workDir = "/tmp/linglong-layer");
-    ~LayerPackager();
+    ~LayerPackager() override;
     utils::error::Result<QSharedPointer<LayerFile>> pack(const LayerDir &dir, const QString &layerFilePath) const;
     utils::error::Result<QSharedPointer<LayerDir>> unpack(LayerFile &file, const QString &destnation);
 
