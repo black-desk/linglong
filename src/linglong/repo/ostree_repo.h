@@ -351,7 +351,7 @@ private:
     static void cleanUploadTask(const package::Reference &ref, const QString &filePath)
     {
         const auto savePath =
-          QStringList{ util::getUserFile(".linglong/builder"), ref.appId }.join(QDir::separator());
+          QStringList{ util::getUserFile(".linglong/builder"), ref.id }.join(QDir::separator());
 
         if (!util::removeDir(savePath)) {
             Q_ASSERT(false);

@@ -53,7 +53,7 @@ private:
     std::tuple<QString, linglong::util::Error> fetchArchiveFile();
 
     QString fixSuffix(const QFileInfo &fi);
-    utils::Result<void> extractFile(const QString &path, const QString &dir);
+    utils::error::Result<void> extractFile(const QString &path, const QString &dir);
 
     util::Error fetchGitRepo();
 
