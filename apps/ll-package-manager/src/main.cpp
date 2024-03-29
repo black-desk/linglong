@@ -70,65 +70,6 @@ void withDBusDaemon()
     return;
 }
 
-void withoutDBusDaemon()
-{
-    qInfo() << "Running linglong package manager without dbus daemon...";
-
-    auto pkgManHelperConn =
-      QDBusConnection::connectToPeer("unix:path=/tmp/linglong-system-helper.socket",
-                                     "ll-system-helper");
-    if (!pkgManHelperConn.isConnected()) {
-        qCritical() << "Failed to connect to system helper:" << pkgManHelperConn.lastError();
-        QCoreApplication::exit(-1);
-        return;
-    }
-
-    auto config = linglong::repo::loadConfig(
-      { LINGLONG_ROOT "/config.yaml", LINGLONG_DATA_DIR "/config.yaml" });
-    if (!config.has_value()) {
-        qCritical() << config.error();
-        QCoreApplication::exit(-1);
-        return;
-    }
-
-    auto api = new linglong::api::client::ClientApi;
-    api->setParent(QCoreApplication::instance());
-    api->setNewServerForAllOperations(
-      QString::fromStdString(config->repos.at(config->defaultRepo)));
-
-    auto ostreeRepo = new linglong::repo::OSTreeRepo(QDir(LINGLONG_ROOT), *config, *api);
-    ostreeRepo->setParent(QCoreApplication::instance());
-
-    auto packageManager =
-      new linglong::service::PackageManager(*ostreeRepo, QCoreApplication::instance());
-    new linglong::adaptors::package_manger::PackageManager1(packageManager);
-
-    auto server = new QDBusServer("unix:path=/tmp/linglong-package-manager.socket",
-                                  QCoreApplication::instance());
-    if (!server->isConnected()) {
-        qCritical() << "listen on socket:" << server->lastError();
-        QCoreApplication::exit(-1);
-        return;
-    }
-    QObject::connect(QCoreApplication::instance(), &QCoreApplication::aboutToQuit, []() {
-        if (QDir::root().remove("/tmp/linglong-package-manager.socket")) {
-            return;
-        }
-        qCritical() << "failed to remove /tmp/linglong-package-manager.socket.";
-    });
-
-    QObject::connect(server, &QDBusServer::newConnection, [packageManager](QDBusConnection conn) {
-        auto res = registerDBusObject(conn, "/org/deepin/linglong/PackageManager", packageManager);
-        if (!res.has_value()) {
-            qCritical() << res.error().code() << res.error().message();
-            return;
-        }
-        QObject::connect(QCoreApplication::instance(), &QCoreApplication::aboutToQuit, [conn]() {
-            unregisterDBusObject(conn, "/org/deepin/linglong/PackageManager");
-        });
-    });
-}
-
 } // namespace
 
 auto main(int argc, char *argv[]) -> int
@@ -146,19 +87,7 @@ auto main(int argc, char *argv[]) -> int
               return;
           }
 
-          QCommandLineParser parser;
-          QCommandLineOption optBus("no-dbus", "service without dbus-daemon");
-          optBus.setFlags(QCommandLineOption::HiddenFromHelp);
-
-          parser.addOptions({ optBus });
-          parser.parse(QCoreApplication::arguments());
-
-          if (!parser.isSet(optBus)) {
-              withDBusDaemon();
-              return;
-          }
-
-          withoutDBusDaemon();
+          withDBusDaemon();
           return;
       },
       Qt::QueuedConnection);

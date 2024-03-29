@@ -36,7 +36,7 @@ public:
     void updateTask(double currentPercentage,
                     double totalPercentage,
                     const QString &message = "") noexcept;
-    void updateStatus(Status newStatus, QString message = "") noexcept;
+    void updateStatus(Status newStatus, const QString &message = "") noexcept;
 
     [[nodiscard]] Status currentStatus() const noexcept { return m_status; }
 
@@ -50,7 +50,8 @@ public:
     auto cancellable() noexcept { return m_cancelFlag; }
 
 Q_SIGNALS:
-    void TaskChanged(QString taskID, QString percentage, QString message, Status status);
+    void
+    TaskChanged(QString taskID, QString percentage, QString message, Status status, QPrivateSignal);
 
 private:
     QString formatPercentage(double increase = 0) const noexcept;

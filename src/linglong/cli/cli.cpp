@@ -441,6 +441,7 @@ int Cli::install(std::map<std::string, docopt::value> &args)
     }
 
     this->taskID = QString::fromStdString(*result->taskID);
+    this->taskDone = false;
     QEventLoop loop;
     std::function<void()> statusChecker = std::function{ [&loop, &statusChecker, this]() -> void {
         if (this->taskDone) {
@@ -520,6 +521,7 @@ int Cli::upgrade(std::map<std::string, docopt::value> &args)
     }
 
     this->taskID = QString::fromStdString(*result->taskID);
+    this->taskDone = false;
     QEventLoop loop;
     std::function<void()> statusChecker = std::function{ [&loop, &statusChecker, this]() -> void {
         if (this->taskDone) {
@@ -650,6 +652,8 @@ int Cli::repo(std::map<std::string, docopt::value> &args)
     LINGLONG_TRACE("command repo");
 
     auto propCfg = this->pkgMan.configuration();
+    auto tmp = propCfg.value("repos");
+
     auto cfg = utils::serialize::fromQVariantMap<api::types::v1::RepoConfig>(propCfg);
     if (!cfg) {
         qCritical() << cfg.error();

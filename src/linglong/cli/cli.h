@@ -53,11 +53,11 @@ private:
     repo::OSTreeRepo &repository;
     api::dbus::v1::PackageManager &pkgMan;
     QString taskID;
-    bool taskDone{ false };
+    bool taskDone{ true };
     service::InstallTask::Status lastStatus;
     void filePathMapping(std::map<std::string, docopt::value> &args,
                          const std::vector<std::string> &command,
-                         std::vector<std::string>& execArgs) const noexcept;
+                         std::vector<std::string> &execArgs) const noexcept;
 
 public:
     int run(std::map<std::string, docopt::value> &args);
