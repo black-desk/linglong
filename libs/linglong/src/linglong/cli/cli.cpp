@@ -15,6 +15,7 @@
 #include "linglong/api/types/v1/PackageManager1UninstallParameters.hpp"
 #include "linglong/package/layer_file.h"
 #include "linglong/runtime/container_builder.h"
+#include "linglong/runtime/container_option.h"
 #include "linglong/utils/command/env.h"
 #include "linglong/utils/configure.h"
 #include "linglong/utils/error/error.h"

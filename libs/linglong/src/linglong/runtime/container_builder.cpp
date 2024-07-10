@@ -7,6 +7,7 @@
 #include "linglong/runtime/container_builder.h"
 
 #include "linglong/api/types/v1/ApplicationConfiguration.hpp"
+#include "linglong/runtime/container_option.h"
 #include "linglong/utils/configure.h"
 #include "linglong/utils/error/error.h"
 #include "linglong/utils/serialize/json.h"

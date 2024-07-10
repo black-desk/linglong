@@ -7,30 +7,16 @@
 #ifndef LINGLONG_RUNTIME_CONTAINER_BUILDER_H_
 #define LINGLONG_RUNTIME_CONTAINER_BUILDER_H_
 
-#include "linglong/api/types/v1/OciConfigurationPatch.hpp"
 #include "linglong/runtime/container.h"
 #include "linglong/utils/error/error.h"
 #include "ocppi/cli/CLI.hpp"
-#include "ocppi/runtime/config/types/Mount.hpp"
 
 #include <QDir>
 #include <QProcess>
 
 namespace linglong::runtime {
 
-struct ContainerOptions
-{
-    QString appID;
-    QString containerID;
-
-    std::optional<QDir> runtimeDir; // mount to /runtime
-    QDir baseDir;                   // mount to /
-    std::optional<QDir> appDir;     // mount to /opt/apps/${info.appid}/files
-
-    std::vector<api::types::v1::OciConfigurationPatch> patches;
-    std::vector<ocppi::runtime::config::types::Mount> mounts; // extra mounts
-    std::vector<std::string> masks;
-};
+class ContainerOptions;
 
 class ContainerBuilder : public QObject
 {
