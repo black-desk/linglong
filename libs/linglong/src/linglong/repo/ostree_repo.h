@@ -84,25 +84,31 @@ public:
 
     void pull(service::InstallTask &taskContext,
               const package::Reference &reference,
+              const QStringList &modules = { "binary" }) noexcept;
+
+    Q_DECL_DEPRECATED_X(R"(Use the "modules" version)")
+    void pull(service::InstallTask &taskContext,
+              const package::Reference &reference,
               const QString &module = "binary") noexcept;
 
-    Q_DECL_DEPRECATED_X(R"(Use the "module" version)")
+    Q_DECL_DEPRECATED_X(R"(Use the "modules" version)")
 
     void pull(service::InstallTask &taskContext,
               const package::Reference &reference,
               bool develop) noexcept
     {
         if (develop) {
-            pull(taskContext, reference, QString("develop"));
+            pull(taskContext, reference, QStringList{ "binary", "develop" });
             return;
         }
-        pull(taskContext, reference, QString("binary"));
+        pull(taskContext, reference, QStringList{ "binary" });
     }
 
     utils::error::Result<package::Reference> clearReference(
       const package::FuzzyReference &fuzz, const clearReferenceOption &opts) const noexcept;
 
     utils::error::Result<std::vector<api::types::v1::PackageInfoV2>> listLocal() const noexcept;
+    // The package list this function return currently include different modules.
     utils::error::Result<std::vector<api::types::v1::PackageInfoV2>>
     listRemote(const package::FuzzyReference &fuzzyRef) const noexcept;
 

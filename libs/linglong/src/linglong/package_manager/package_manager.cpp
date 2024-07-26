@@ -25,6 +25,93 @@
 #include <QMetaObject>
 #include <QSettings>
 
+namespace {
+
+const char *getLocale() noexcept
+{
+    // Refer to https://man7.org/linux/man-pages/man7/locale.7.html
+    // (1)  If there is a non-null environment variable LC_ALL, the value of LC_ALL is used.
+    const char *lang = nullptr;
+    lang = getenv("LC_ALL");
+    if (lang != nullptr) {
+        return lang;
+    }
+
+    // (2)  If an environment variable with the same name as one of the categories above exists and
+    // is non-null, its value is used for that category.
+
+    const static std::vector<std::string> localeEnvs{
+        "LC_ADDRESS",  "LC_COLLATE",  "LC_CTYPE",       "LC_IDENTIFICATION",
+        "LC_MONETARY", "LC_MESSAGES", "LC_MEASUREMENT", "LC_NAME",
+        "LC_NUMERIC",  "LC_PAPER",    "LC_TELEPHONE",   "LC_TIME",
+    };
+
+    bool warning = false;
+
+    for (const auto &env : localeEnvs) {
+        if (getenv(env.c_str()) == nullptr) {
+            continue;
+        }
+        warning = true;
+    }
+
+    if (warning) {
+        qWarning()
+          << "Some non-LC_ALL LC_* environment variables is set while LC_ALL not set yet. This is "
+             "not supported now and language module policy will fallback to use LANG.";
+    }
+
+    // (3)  If there is a non-null environment variable LANG, the value of LANG is used.
+    lang = getenv("LANG");
+    if (lang != nullptr) {
+        return lang;
+    }
+
+    return "C";
+}
+
+std::string getLanguage(const char *locale) noexcept
+{
+    // Refer to https://pubs.opengroup.org/onlinepubs/9699919799/basedefs/V1_chap08.html
+    // `locale` format is [language[_territory][.codeset][@modifier]]
+    // We want [language[_territory] part here.
+
+    Q_ASSERT(locale != nullptr);
+
+    std::string lang(locale);
+    auto pos = lang.find('.');
+    if (pos != std::string::npos) {
+        lang = lang.substr(0, pos);
+    }
+
+    pos = lang.find('@');
+    if (pos != std::string::npos) {
+        lang = lang.substr(0, pos);
+    }
+
+    return lang;
+}
+
+QStringList getModuleList(const linglong::repo::OSTreeRepo &repo,
+                          const linglong::package::Reference &ref,
+                          bool withDevelop)
+{
+    auto list = repo.listRemote(
+      linglong::package::FuzzyReference::create(ref.channel, ref.id, ref.version, ref.arch)
+        .value());
+    QStringList modules{ "binary", "runtime" };
+    if (withDevelop) {
+        modules << "develop";
+    }
+
+    auto lang = getLanguage(getLocale());
+    modules << QString::fromStdString("lang_" + lang);
+
+    return modules;
+}
+
+} // namespace
+
 namespace linglong::service {
 
 namespace {
@@ -564,8 +651,10 @@ auto PackageManager::Install(const QVariantMap &parameters) noexcept -> QVariant
                                          {
                                            .fallbackToRemote = false // NOLINT
                                          });
+
     auto curModule = paras->package.packageManager1PackageModule.value_or("runtime");
     auto isDevelop = curModule == "develop";
+    auto modules = getModuleList(isDevelop);
 
     if (ref) {
         auto layerDir = this->repo.getLayerDir(*ref, isDevelop);
@@ -605,7 +694,7 @@ auto PackageManager::Install(const QVariantMap &parameters) noexcept -> QVariant
               this->taskList.erase(elem);
           });
 
-          this->Install(taskRef, reference, isDevelop);
+          this->Install(taskRef, reference, modules);
       },
       Qt::QueuedConnection);
 
@@ -618,7 +707,7 @@ auto PackageManager::Install(const QVariantMap &parameters) noexcept -> QVariant
 
 void PackageManager::Install(InstallTask &taskContext,
                              const package::Reference &ref,
-                             bool develop) noexcept
+                             const QStringList &modules) noexcept
 {
     LINGLONG_TRACE("install " + ref.toString());
 
@@ -635,13 +724,13 @@ void PackageManager::Install(InstallTask &taskContext,
 
     utils::Transaction t;
 
-    this->repo.pull(taskContext, ref, develop);
+    this->repo.pull(taskContext, ref, module);
     if (taskContext.currentStatus() == InstallTask::Failed
         || taskContext.currentStatus() == InstallTask::Canceled) {
         return;
     }
-    t.addRollBack([this, &ref, develop]() noexcept {
-        auto result = this->repo.remove(ref, develop);
+    t.addRollBack([this, &ref, module]() noexcept {
+        auto result = this->repo.remove(ref, module);
         if (!result) {
             qCritical() << result.error();
             Q_ASSERT(false);
@@ -659,6 +748,7 @@ void PackageManager::Install(InstallTask &taskContext,
         taskContext.updateStatus(InstallTask::Failed, LINGLONG_ERRV(info).message());
         return;
     }
+
     // for 'kind: app', check runtime and foundation
     if (info->kind == "app") {
         pullDependency(taskContext, *info, develop);
@@ -713,7 +803,8 @@ auto PackageManager::Update(const QVariantMap &parameters) noexcept -> QVariantM
         return toDBusReply(paras);
     }
 
-    auto installedAppFuzzyRef = package::FuzzyReference::parse(QString::fromStdString(paras->package.id));
+    auto installedAppFuzzyRef =
+      package::FuzzyReference::parse(QString::fromStdString(paras->package.id));
     if (!installedAppFuzzyRef) {
         return toDBusReply(installedAppFuzzyRef);
     }

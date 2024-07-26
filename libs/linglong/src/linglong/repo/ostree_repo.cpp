@@ -1240,6 +1240,15 @@ utils::error::Result<void> OSTreeRepo::prune()
 
 void OSTreeRepo::pull(service::InstallTask &taskContext,
                       const package::Reference &reference,
+                      const QStringList &modules) noexcept
+{
+    for (const auto &module : modules) {
+        this->pull(taskContext, reference, module);
+    }
+}
+
+void OSTreeRepo::pull(service::InstallTask &taskContext,
+                      const package::Reference &reference,
                       const QString &module) noexcept
 {
     auto refString = ostreeSpecFromReferenceV2(reference, module).toUtf8();
