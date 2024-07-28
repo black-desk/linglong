@@ -1,0 +1,35 @@
+#!/bin/sh
+
+# SPDX-FileCopyrightText: 2023 UnionTech Software Technology Co., Ltd.
+#
+# SPDX-License-Identifier: LGPL-3.0-or-later
+
+#DEBHELPER#
+
+OS=$(awk '/^NAME=/' /etc/os-release | sed 's/NAME=//' | sed 's/\"//g' | tr '[:upper:]' '[:lower:]')
+if ! [ "$OS" = "uos" ];then
+        exit 0 
+fi
+
+OSVERSION=$( awk '/VERSION=/' /etc/os-release | sed 's/VERSION=//' | sed 's/\"//g' | sed 's/[.]0/./')
+if ! [ "$OSVERSION" = "20" ];then
+        exit 0 
+fi
+
+if [ -f /usr/lib/sysctl.d/linglong.conf ]; then
+        exit 0
+fi
+
+if [ "$(sysctl kernel.unprivileged_userns_clone)" = "1" ]; then
+        exit 0
+fi
+
+LL_BOX_BIN="/usr/bin/ll-box-static"
+if ! [ -x $LL_BOX_BIN ]; then
+        LL_BOX_BIN="/usr/bin/ll-box"
+fi
+if ! [ -x $LL_BOX_BIN ]; then
+        exit 0
+fi
+
+setcap cap_sys_admin=ep "$LL_BOX_BIN"
